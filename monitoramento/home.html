@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <header id="main-header" class="header"></header>
+
+      <!-- Painel do veículo -->
+      <div id="hero-panel" class="hero"></div>
+
+      <!-- Conteúdo principal -->
+      <main class="content">
+
+        <h2 class="section-title">Overview</h2>
+
+        <!-- Card: Condições do Motor -->
+        <a href="condicoes-motor.html" class="card-link">
+          <div class="card">
+            <div class="card-top">
+              <div>
+                <div class="card-title">Condições do motor</div>
+                <div class="card-subtitle">Temperaturas</div>
+              </div>
+              <span id="ico-chevron-motor"></span>
+            </div>
+            <div id="temp-row" class="temp-row"></div>
+          </div>
+        </a>
+
+        <!-- Grid: Velocidade + Alertas -->
+        <div class="grid-2">
+
+          <!-- Velocidade -->
+          <div class="card" style="margin-bottom:0;display:flex;flex-direction:column;height:100%">
+            <div class="card-title">Velocidade</div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-top:8px">
+              <span id="ico-speed"></span>
+              <div id="vel-value"></div>
+              <p id="vel-disconnected" class="metric-disconnected hidden">Veículo não conectado</p>
+            </div>
+          </div>
+
+          <!-- Alertas -->
+          <a href="../alertas/alertas.html" class="card-link" style="margin-bottom:0">
+            <div class="card" style="height:100%">
+              <div class="card-top">
+                <div class="card-title">Alertas</div>
+                <span id="ico-chevron-alertas"></span>
+              </div>
+              <div id="alertas-content"></div>
+            </div>
+          </a>
+
+        </div>
+
+        <!-- RPM -->
+        <a href="rpm.html" class="card-link mt-12">
+          <div class="card">
+            <div class="card-top">
+              <div class="card-title">RPM</div>
+              <span id="ico-chevron-rpm"></span>
+            </div>
+            <div class="metric-icon-row" style="justify-content:center">
+              <span id="ico-rpm"></span>
+              <div id="rpm-value"></div>
+              <span id="ico-warn-rpm" class="hidden"></span>
+            </div>
+          </div>
+        </a>
+
+      </main>
+
+      <nav id="bottom-nav" class="bottom-nav"></nav>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    verificarAuth();
+
+    // Estado de conexão
+    if (sessionStorage.getItem('sf_conectado') === null) {
+      sessionStorage.setItem('sf_conectado', DADOS.veiculo.conectado ? 'true' : 'false');
+    }
+
+    var conectado = estaConectado();
+
+    renderHeader({ greeting: 'Bom dia, ' + DADOS.usuario.nome, vehicle: DADOS.veiculo.modelo });
+    renderBottomNav('home');
+
+    // Ícones de chevron
+    document.getElementById('ico-chevron-motor').innerHTML   = icoChevron();
+    document.getElementById('ico-chevron-alertas').innerHTML = icoChevron();
+    document.getElementById('ico-chevron-rpm').innerHTML     = icoChevron();
+    document.getElementById('ico-speed').innerHTML           = icSpeed();
+    document.getElementById('ico-rpm').innerHTML             = icoRpm();
+
+    // --- HERO PANEL ---
+    var heroPainel = document.getElementById('hero-panel');
+    var icoBt = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>';
+
+    if (conectado) {
+      heroPainel.innerHTML = `
+        <img src="${DADOS.veiculo.foto}" alt="Foto do veículo ${DADOS.veiculo.modelo}" class="hero-img">
+        <div class="hero-overlay">
+          <button class="hero-connect-btn hero-disconnect-btn" onclick="desconectarVeiculo()">
+            ${icoBt} Desconectar
+          </button>
+        </div>`;
+    } else {
+      heroPainel.innerHTML = `
+        <img src="${DADOS.veiculo.fotoDesativado}" alt="Veículo desconectado" class="hero-img">
+        <div class="hero-overlay">
+          <button class="hero-connect-btn" onclick="conectarVeiculo()">
+            ${icoBt} Conectar ao veículo
+          </button>
+        </div>`;
+    }
+
+    // --- TEMPERATURAS (SVG icons) ---
+    var tempRow = document.getElementById('temp-row');
+    if (conectado) {
+      var t = DADOS.telemetria;
+      var oilWarn = t.tempOleo > 85;
+
+      tempRow.innerHTML = `
+        <div class="temp-item">
+          <span class="temp-icon">${icoWater('#3B82F6', 22)}</span>
+          <span class="temp-value">${t.tempLiquido} °C</span>
+          <span class="temp-label">Líquido de arrefecimento</span>
+        </div>
+        <div class="temp-item">
+          <span class="temp-icon">${icoOil(oilWarn ? '#C2182B' : '#F59E0B', 22)}</span>
+          <span class="temp-value ${oilWarn ? 'warn' : ''}">${t.tempOleo} °C${oilWarn ? ' ⚠' : ''}</span>
+          <span class="temp-label">Óleo</span>
+        </div>
+        <div class="temp-item">
+          <span class="temp-icon">${icoAir('#9CA3AF', 22)}</span>
+          <span class="temp-value">${t.tempAr} °C</span>
+          <span class="temp-label">Ar de admissão</span>
+        </div>`;
+    } else {
+      tempRow.innerHTML = `
+        <div class="temp-item">
+          <span class="temp-icon">${icoWater('#D1D5DB', 22)}</span>
+          <span class="temp-value" style="color:var(--text-light)">— °C</span>
+          <span class="temp-label">Líquido de arrefecimento</span>
+        </div>
+        <div class="temp-item">
+          <span class="temp-icon">${icoOil('#D1D5DB', 22)}</span>
+          <span class="temp-value" style="color:var(--text-light)">— °C</span>
+          <span class="temp-label">Óleo</span>
+        </div>
+        <div class="temp-item">
+          <span class="temp-icon">${icoAir('#D1D5DB', 22)}</span>
+          <span class="temp-value" style="color:var(--text-light)">— °C</span>
+          <span class="temp-label">Ar de admissão</span>
+        </div>`;
+    }
+
+    // --- VELOCIDADE ---
+    var velEl = document.getElementById('vel-value');
+    if (conectado) {
+      velEl.innerHTML = `<span class="metric-value">${DADOS.telemetria.velocidade} <span class="metric-unit">km/h</span></span>`;
+    } else {
+      velEl.innerHTML = `<span class="metric-dash">—</span>`;
+      document.getElementById('vel-disconnected').classList.remove('hidden');
+    }
+
+    // --- ALERTAS ---
+    var alertasContent = document.getElementById('alertas-content');
+    if (conectado) {
+      var itens = DADOS.alertas.slice(0, 3).map(function (a) {
+        return `<div class="alert-item">
+          <span class="alert-dot ${a.nivel}"></span>
+          <div class="alert-body">
+            <div class="alert-title">Alerta ${a.id}</div>
+            <div class="alert-meta">${a.tempo}</div>
+            ${a.observacao ? `<div class="alert-obs">${a.observacao}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+
+      var restantes = DADOS.alertas.length - 3;
+      alertasContent.innerHTML = `<div class="alert-list">${itens}</div>
+        ${restantes > 0 ? `<p class="alerts-more">+${restantes} alertas</p>` : ''}`;
+    } else {
+      alertasContent.innerHTML = `<p class="metric-disconnected">Veículo não conectado</p>`;
+    }
+
+    // --- RPM ---
+    var rpmEl = document.getElementById('rpm-value');
+    if (conectado) {
+      var rpmWarn = DADOS.telemetria.rpm < 750;
+      rpmEl.innerHTML = `<span class="metric-value">${DADOS.telemetria.rpm.toLocaleString('pt-BR')}</span>`;
+      if (rpmWarn) {
+        document.getElementById('ico-warn-rpm').innerHTML = icoWarning();
+        document.getElementById('ico-warn-rpm').classList.remove('hidden');
+      }
+    } else {
+      rpmEl.innerHTML = `<span class="metric-dash">—</span>`;
+    }
+  </script>
+</body>
+</html>

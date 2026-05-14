@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <!-- Header Auth -->
+      <header class="header-auth">
+        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" aria-hidden="true">
+          <circle cx="36" cy="36" r="36" fill="rgba(255,255,255,0.12)"/>
+          <circle cx="36" cy="36" r="34" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/>
+          <circle cx="36" cy="24" r="10" stroke="white" stroke-width="2.5"/>
+          <path d="M16 58c0-11 9-20 20-20s20 9 20 20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <h1>Bem-vindo de volta</h1>
+        <p>Entre com suas credenciais para acessar o sistema</p>
+      </header>
+
+      <!-- Sheet -->
+      <main class="auth-sheet">
+
+        <div class="field">
+          <label class="field-label" for="usuario">Usuário</label>
+          <input class="field-input" type="text" id="usuario"
+                 placeholder="Seu nome de usuário" value="Amanda Pereira" autocomplete="username">
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="senha">Senha</label>
+          <input class="field-input" type="password" id="senha"
+                 placeholder="••••••••••" autocomplete="current-password">
+        </div>
+
+        <a href="recuperar-senha.html" class="field-link">Esqueci minha senha</a>
+
+        <p id="msg-erro" class="mt-8 text-red hidden" style="font-size:13px"></p>
+
+        <div class="mt-24">
+          <button class="btn btn-primary" id="btn-entrar">Entrar</button>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    // Redireciona se já estiver logado
+    if (sessionStorage.getItem('sf_logado')) {
+      window.location.href = ROTAS.home;
+    }
+
+    document.getElementById('btn-entrar').addEventListener('click', function () {
+      var usuario = document.getElementById('usuario').value.trim();
+      var senha   = document.getElementById('senha').value;
+      var msgErro = document.getElementById('msg-erro');
+
+      if (!usuario || !senha) {
+        msgErro.textContent = 'Preencha todos os campos.';
+        msgErro.classList.remove('hidden');
+        return;
+      }
+
+      msgErro.classList.add('hidden');
+      fazerLogin();
+    });
+
+    // Submete ao pressionar Enter
+    document.getElementById('senha').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        document.getElementById('btn-entrar').click();
+      }
+    });
+  </script>
+</body>
+</html>

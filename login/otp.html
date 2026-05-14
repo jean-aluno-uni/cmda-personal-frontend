@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Código de Verificação</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <!-- Header Auth -->
+      <header class="header-auth">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.68A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/>
+        </svg>
+        <h1>Código de verificação</h1>
+      </header>
+
+      <!-- Sheet -->
+      <main class="auth-sheet">
+
+        <a href="recuperar-senha.html" class="auth-back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+          Voltar
+        </a>
+
+        <p class="auth-desc">
+          Digite o código de 6 dígitos enviado para
+          <span class="auth-email-highlight" id="email-exibido"></span>
+        </p>
+
+        <!-- 6 caixas OTP -->
+        <div class="otp-row" role="group" aria-label="Campos de código OTP">
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" id="otp-0" aria-label="Dígito 1">
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" id="otp-1" aria-label="Dígito 2">
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" id="otp-2" aria-label="Dígito 3">
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" id="otp-3" aria-label="Dígito 4">
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" id="otp-4" aria-label="Dígito 5">
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" id="otp-5" aria-label="Dígito 6">
+        </div>
+
+        <!-- Reenviar + Verificar -->
+        <div class="otp-actions">
+          <button class="otp-resend" id="btn-reenviar" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+            </svg>
+            Reenviar código
+          </button>
+          <button class="btn btn-primary btn-sm" id="btn-verificar">Verificar</button>
+        </div>
+
+        <p id="msg-erro" class="mt-16 text-red hidden" style="font-size:13px;text-align:center"></p>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    // Exibe e-mail no topo
+    var email = sessionStorage.getItem('sf_email_otp') || DADOS.usuario.email;
+    document.getElementById('email-exibido').textContent = email;
+
+    var inputs = document.querySelectorAll('.otp-box');
+
+    // Auto-avança para o próximo campo
+    inputs.forEach(function (input, i) {
+      input.addEventListener('input', function () {
+        var val = this.value.replace(/\D/g, '');
+        this.value = val;
+        if (val && i < inputs.length - 1) {
+          inputs[i + 1].focus();
+        }
+      });
+
+      // Backspace volta ao anterior
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !this.value && i > 0) {
+          inputs[i - 1].focus();
+        }
+      });
+    });
+
+    // Foco automático no primeiro campo
+    inputs[0].focus();
+
+    // Reenviar (simulado)
+    document.getElementById('btn-reenviar').addEventListener('click', function () {
+      this.textContent = 'Código reenviado!';
+      var self = this;
+      setTimeout(function () {
+        self.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg> Reenviar código';
+      }, 2500);
+    });
+
+    // Verificar
+    document.getElementById('btn-verificar').addEventListener('click', function () {
+      var codigo = Array.from(inputs).map(function (i) { return i.value; }).join('');
+      var msgErro = document.getElementById('msg-erro');
+
+      if (codigo.length < 6) {
+        msgErro.textContent = 'Digite todos os 6 dígitos.';
+        msgErro.classList.remove('hidden');
+        return;
+      }
+
+      msgErro.classList.add('hidden');
+      window.location.href = ROTAS.novaSenha;
+    });
+  </script>
+</body>
+</html>

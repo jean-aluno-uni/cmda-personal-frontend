@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Condições do Motor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <header id="main-header" class="header"></header>
+
+      <main class="content">
+
+        <h2 class="section-title">Temperaturas atuais</h2>
+
+        <div id="temp-cards" class="grid-2" style="margin-bottom:0"></div>
+
+        <div id="temp-card-geral" style="margin-top:8px"></div>
+
+        <!-- Histórico -->
+        <h2 class="section-title mt-20">Histórico de temperatura</h2>
+
+        <div class="card" style="padding:16px 12px">
+          <div id="line-chart"></div>
+
+          <!-- Legenda -->
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-dot" style="background:#C2182B"></span>
+              <span>Óleo</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:#3B82F6"></span>
+              <span>Líquido</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:#9CA3AF"></span>
+              <span>Ar de adm.</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:#10B981"></span>
+              <span>Geral</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabela de diagnóstico motor -->
+        <h2 class="section-title mt-20">Diagnóstico</h2>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="data-table" id="diag-table"></table>
+        </div>
+
+      </main>
+
+      <nav id="bottom-nav" class="bottom-nav"></nav>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    verificarAuth();
+
+    var conectado = estaConectado();
+
+    renderHeader({
+      back: ROTAS.home,
+      greeting: 'Condições do motor',
+      vehicle: DADOS.veiculo.modelo
+    });
+    renderBottomNav('');
+
+    // --- TEMP CARDS com ícones SVG ---
+    var tempCards = document.getElementById('temp-cards');
+    if (conectado) {
+      var t = DADOS.telemetria;
+      var oilWarn = t.tempOleo > 85;
+
+      tempCards.innerHTML = `
+        <div class="card" style="margin-bottom:0">
+          <div class="temp-item-lg">
+            <span class="temp-icon-lg">${icoOil(oilWarn ? '#C2182B' : '#F59E0B', 28)}</span>
+            <div>
+              <div class="temp-value-lg ${oilWarn ? 'warn' : ''}">${t.tempOleo} °C${oilWarn ? ' ⚠' : ''}</div>
+              <div class="temp-label">Óleo</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div class="temp-item-lg">
+            <span class="temp-icon-lg">${icoWater('#3B82F6', 28)}</span>
+            <div>
+              <div class="temp-value-lg">${t.tempLiquido} °C</div>
+              <div class="temp-label">Líquido</div>
+            </div>
+          </div>
+        </div>`;
+
+      document.getElementById('temp-card-geral').innerHTML = `
+        <div class="grid-2" style="margin-bottom:0">
+          <div class="card" style="margin-bottom:0">
+            <div class="temp-item-lg">
+              <span class="temp-icon-lg">${icoAir('#9CA3AF', 28)}</span>
+              <div>
+                <div class="temp-value-lg">${t.tempAr} °C</div>
+                <div class="temp-label">Ar de admissão</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div class="temp-item-lg">
+              <span class="temp-icon-lg">${icoThermo('#10B981', 28)}</span>
+              <div>
+                <div class="temp-value-lg">${t.tempGeral} °C</div>
+                <div class="temp-label">Geral</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    } else {
+      tempCards.innerHTML = `
+        <div class="card" style="margin-bottom:0">
+          <div class="temp-item-lg">
+            <span class="temp-icon-lg">${icoOil('#D1D5DB', 28)}</span>
+            <div>
+              <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
+              <div class="temp-label">Óleo</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div class="temp-item-lg">
+            <span class="temp-icon-lg">${icoWater('#D1D5DB', 28)}</span>
+            <div>
+              <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
+              <div class="temp-label">Líquido</div>
+            </div>
+          </div>
+        </div>`;
+
+      document.getElementById('temp-card-geral').innerHTML = `
+        <div class="grid-2" style="margin-bottom:0">
+          <div class="card" style="margin-bottom:0">
+            <div class="temp-item-lg">
+              <span class="temp-icon-lg">${icoAir('#D1D5DB', 28)}</span>
+              <div>
+                <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
+                <div class="temp-label">Ar de admissão</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div class="temp-item-lg">
+              <span class="temp-icon-lg">${icoThermo('#D1D5DB', 28)}</span>
+              <div>
+                <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
+                <div class="temp-label">Geral</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // --- LINE CHART ---
+    if (conectado) {
+      renderLineChart('line-chart', DADOS.historicoTemperatura);
+    } else {
+      document.getElementById('line-chart').innerHTML =
+        '<p style="text-align:center;color:var(--text-secondary);font-size:13px;padding:24px 0">Veículo não conectado</p>';
+    }
+
+    // --- TABELA DIAGNÓSTICO ---
+    var diagTable = document.getElementById('diag-table');
+    var motorRows = DADOS.diagnostico.filter(function (d) {
+      return d.indicador.toLowerCase().includes('temp');
+    });
+
+    var linhas = motorRows.map(function (d, i) {
+      var isLast = i === motorRows.length - 1;
+      return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
+        <td>${d.indicador}</td>
+        <td class="${d.alerta ? 'td-warn' : ''}">${conectado ? d.valor : '—'}</td>
+        <td style="font-size:11px;color:var(--text-secondary)">${d.referencia}</td>
+        <td style="font-size:12px;color:${d.alerta ? 'var(--primary)' : 'var(--text-secondary)'}">${conectado ? d.observacao : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    diagTable.innerHTML = `
+      <thead>
+        <tr>
+          <th>Indicador</th>
+          <th>Valor</th>
+          <th>Referência</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>`;
+  </script>
+</body>
+</html>

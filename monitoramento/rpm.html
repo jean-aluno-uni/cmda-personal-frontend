@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — RPM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <header id="main-header" class="header"></header>
+
+      <main class="content">
+
+        <h2 class="section-title">RPM atual</h2>
+
+        <div class="card" style="align-items:center;text-align:center">
+          <div id="rpm-gauge"></div>
+          <p id="rpm-footnote" class="rpm-footnote hidden">* Desempenho esperado</p>
+        </div>
+
+        <h2 class="section-title mt-20">Status</h2>
+
+        <div class="card" id="rpm-status-card"></div>
+
+        <h2 class="section-title mt-20">Diagnóstico</h2>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="data-table" id="diag-table"></table>
+        </div>
+
+      </main>
+
+      <nav id="bottom-nav" class="bottom-nav"></nav>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    verificarAuth();
+
+    var conectado = estaConectado();
+
+    renderHeader({
+      back: ROTAS.home,
+      greeting: 'RPM do motor',
+      vehicle: DADOS.veiculo.modelo
+    });
+    renderBottomNav('');
+
+    // --- GAUGE ---
+    var rpm    = DADOS.telemetria.rpm;
+    var rpmMax = DADOS.telemetria.rpmMax;
+
+    if (conectado) {
+      renderRpmGauge('rpm-gauge', rpm, rpmMax);
+      document.getElementById('rpm-footnote').classList.remove('hidden');
+    } else {
+      document.getElementById('rpm-gauge').innerHTML = `
+        <p style="text-align:center;color:var(--text-secondary);font-size:13px;padding:48px 0 16px">
+          Veículo não conectado
+        </p>`;
+    }
+
+    // --- STATUS ---
+    var statusCard = document.getElementById('rpm-status-card');
+    if (conectado) {
+      var statusLabel, statusClass, statusDesc;
+      if (rpm < 750) {
+        statusLabel = 'Baixo';
+        statusClass = 'status-badge status-high';
+        statusDesc  = 'RPM abaixo do mínimo esperado. Verifique o motor.';
+      } else if (rpm < 1500) {
+        statusLabel = 'Ocioso';
+        statusClass = 'status-badge status-medium';
+        statusDesc  = 'Motor em marcha lenta.';
+      } else if (rpm <= 2800) {
+        statusLabel = 'Normal';
+        statusClass = 'status-badge status-ok';
+        statusDesc  = 'Motor operando dentro da faixa esperada.';
+      } else {
+        statusLabel = 'Alto';
+        statusClass = 'status-badge status-high';
+        statusDesc  = 'RPM elevado. Reduza a aceleração.';
+      }
+
+      statusCard.innerHTML = `
+        <div class="status-row">
+          <div>
+            <div class="card-title" style="margin-bottom:4px">Condição atual</div>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0">${statusDesc}</p>
+          </div>
+          <span class="${statusClass}">${statusLabel}</span>
+        </div>`;
+    } else {
+      statusCard.innerHTML = `<p class="metric-disconnected" style="font-size:13px;color:var(--text-secondary)">Veículo não conectado</p>`;
+    }
+
+    // --- TABELA DIAGNÓSTICO ---
+    var diagTable = document.getElementById('diag-table');
+    var rows = DADOS.diagnostico.filter(function (d) {
+      return d.indicador === 'RPM' || d.indicador === 'Velocidade';
+    });
+
+    var linhas = rows.map(function (d, i) {
+      var isLast = i === rows.length - 1;
+      return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
+        <td>${d.indicador}</td>
+        <td class="${d.alerta ? 'td-warn' : ''}">${conectado ? d.valor : '—'}</td>
+        <td style="color:var(--text-secondary);font-size:12px">${conectado ? d.observacao : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    diagTable.innerHTML = `
+      <thead>
+        <tr>
+          <th>Indicador</th>
+          <th>Valor</th>
+          <th>Observação</th>
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>`;
+  </script>
+</body>
+</html>

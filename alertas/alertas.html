@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Alertas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <header id="main-header" class="header"></header>
+
+      <main class="content">
+
+        <!-- Seletor de período -->
+        <div class="period-selector" role="group" aria-label="Filtro por período">
+          <button class="period-btn active" data-period="24h">24h</button>
+          <button class="period-btn" data-period="7d">7 dias</button>
+          <button class="period-btn" data-period="30d">30 dias</button>
+        </div>
+
+        <h2 class="section-title">Origem dos alertas</h2>
+
+        <div class="card" id="origem-card">
+          <div class="alerta-chart-wrap">
+            <!-- Container com dimensões fixas para o donut funcionar corretamente -->
+            <div style="position:relative;width:130px;height:130px;flex-shrink:0">
+              <div id="donut-chart"></div>
+              <div class="donut-center-label">
+                <div class="donut-total" id="donut-total">—</div>
+                <div class="donut-sublabel">alertas</div>
+              </div>
+            </div>
+            <div id="donut-legend" class="alerta-legend-row"></div>
+          </div>
+        </div>
+
+        <!-- Lista de alertas -->
+        <h2 class="section-title mt-20" style="display:flex;align-items:center;justify-content:space-between">
+          Todos os alertas
+          <button id="btn-expandir" class="expand-btn" aria-label="Ver todos os alertas">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
+        </h2>
+
+        <div class="card" style="padding:0;overflow:hidden" id="alertas-card">
+          <table class="data-table" id="alertas-table"></table>
+        </div>
+
+      </main>
+
+      <nav id="bottom-nav" class="bottom-nav"></nav>
+    </div>
+  </div>
+
+  <!-- Modal: todos os alertas -->
+  <div class="modal-overlay hidden" id="modal-todos-alertas" role="dialog" aria-modal="true" aria-labelledby="modal-alertas-titulo">
+    <div class="modal-box" style="max-height:82vh;display:flex;flex-direction:column">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-alertas-titulo">Todos os alertas</span>
+        <button class="modal-close" id="fechar-modal-alertas" aria-label="Fechar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <p id="modal-alertas-subtitulo" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px"></p>
+      <div id="modal-alertas-lista" style="overflow-y:auto;flex:1"></div>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    verificarAuth();
+
+    var conectado = estaConectado();
+
+    renderHeader({
+      back: ROTAS.home,
+      greeting: 'Alertas',
+      vehicle: DADOS.veiculo.modelo
+    });
+    renderBottomNav('');
+
+    var periodoAtivo = '24h';
+
+    function getDados() {
+      return DADOS.alertasPorPeriodo[periodoAtivo] || DADOS.alertasPorPeriodo['24h'];
+    }
+
+    // --- SELETOR DE PERÍODO ---
+    var btns = document.querySelectorAll('.period-btn');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        for (var j = 0; j < btns.length; j++) { btns[j].classList.remove('active'); }
+        this.classList.add('active');
+        periodoAtivo = this.getAttribute('data-period');
+        renderCharts();
+        renderTabela();
+      });
+    }
+
+    // --- DONUT + LEGENDA ---
+    function renderCharts() {
+      var d = getDados();
+
+      if (conectado) {
+        document.getElementById('donut-total').textContent = d.total;
+
+        renderDonutChart('donut-chart', d.origemAlertas.map(function (o) {
+          return { percentual: o.percentual, cor: o.cor };
+        }), 130);
+
+        var legendHTML = '';
+        for (var i = 0; i < d.origemAlertas.length; i++) {
+          var o = d.origemAlertas[i];
+          legendHTML += '<div class="alerta-legend-item">' +
+            '<span style="width:10px;height:10px;border-radius:50%;background:' + o.cor + ';display:inline-block;flex-shrink:0"></span>' +
+            '<div>' +
+              '<div class="alerta-legend-local">' + o.local + '</div>' +
+              '<div class="alerta-legend-pct">' + o.percentual.toFixed(1) + '%</div>' +
+            '</div>' +
+          '</div>';
+        }
+        document.getElementById('donut-legend').innerHTML = legendHTML;
+
+      } else {
+        document.getElementById('donut-total').textContent = '—';
+        renderDonutChart('donut-chart', [{ percentual: 100, cor: '#E5E7EB' }], 130);
+        document.getElementById('donut-legend').innerHTML =
+          '<p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Conecte o veículo para ver os dados</p>';
+      }
+    }
+
+    // --- TABELA ---
+    function renderTabela() {
+      var d = getDados();
+      var tabela = document.getElementById('alertas-table');
+
+      if (!conectado) {
+        tabela.innerHTML =
+          '<thead><tr><th>Descricao</th><th>Tempo</th><th>Local</th></tr></thead>' +
+          '<tbody><tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:20px;font-size:13px">Veículo não conectado</td></tr></tbody>';
+        return;
+      }
+
+      var linhas = '';
+      for (var i = 0; i < d.tabelaAlertas.length; i++) {
+        var a = d.tabelaAlertas[i];
+        var isLast = i === d.tabelaAlertas.length - 1;
+        linhas += '<tr style="' + (isLast ? '' : 'border-bottom:1px solid var(--border)') + '">' +
+          '<td><div style="display:flex;align-items:center;gap:7px">' +
+            '<span class="alert-dot ' + a.nivel + '"></span>' +
+            '<span style="font-size:13px">' + a.descricao + '</span>' +
+          '</div></td>' +
+          '<td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">' + a.tempo + '</td>' +
+          '<td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">' + a.local + '</td>' +
+        '</tr>';
+      }
+
+      tabela.innerHTML =
+        '<thead><tr><th>Descricao</th><th>Tempo</th><th>Local</th></tr></thead>' +
+        '<tbody>' + linhas + '</tbody>';
+    }
+
+    renderCharts();
+    renderTabela();
+
+    // --- MODAL EXPANDIR ---
+    document.getElementById('btn-expandir').addEventListener('click', function () {
+      if (!conectado) return;
+      var d = getDados();
+      var labels = { '24h': 'últimas 24 horas', '7d': 'últimos 7 dias', '30d': 'últimos 30 dias' };
+      document.getElementById('modal-alertas-subtitulo').textContent =
+        d.total + ' alertas nos ' + labels[periodoAtivo];
+
+      var listaHTML = '';
+      for (var i = 0; i < d.todosAlertas.length; i++) {
+        var a = d.todosAlertas[i];
+        var isLast = i === d.todosAlertas.length - 1;
+        listaHTML += '<div style="display:flex;align-items:flex-start;gap:10px;padding:11px 0;' +
+          (isLast ? '' : 'border-bottom:1px solid var(--border)') + '">' +
+          '<span class="alert-dot ' + a.nivel + '" style="margin-top:3px;flex-shrink:0"></span>' +
+          '<div style="flex:1">' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + a.descricao + '</div>' +
+            '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">' + a.tempo + ' · ' + a.local + '</div>' +
+          '</div>' +
+        '</div>';
+      }
+      document.getElementById('modal-alertas-lista').innerHTML = listaHTML;
+      document.getElementById('modal-todos-alertas').classList.remove('hidden');
+    });
+
+    document.getElementById('fechar-modal-alertas').addEventListener('click', function () {
+      document.getElementById('modal-todos-alertas').classList.add('hidden');
+    });
+
+    document.getElementById('modal-todos-alertas').addEventListener('click', function (e) {
+      if (e.target === this) {
+        this.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Diagnóstico</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <header id="main-header" class="header"></header>
+
+      <main class="content">
+
+        <h2 class="section-title">Status geral</h2>
+
+        <div class="card" id="status-geral-card"></div>
+
+        <h2 class="section-title mt-20">Indicadores</h2>
+
+        <div class="grid-2" id="indicadores-grid"></div>
+
+        <h2 class="section-title mt-12">Detalhes</h2>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="data-table" id="diag-table"></table>
+        </div>
+
+      </main>
+
+      <nav id="bottom-nav" class="bottom-nav"></nav>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    verificarAuth();
+
+    var conectado = estaConectado();
+
+    renderHeader({
+      greeting: 'Diagnóstico',
+      vehicle: DADOS.veiculo.modelo
+    });
+    renderBottomNav('diagnostico');
+
+    // --- STATUS GERAL ---
+    var statusCard = document.getElementById('status-geral-card');
+    if (conectado) {
+      var temAlerta = DADOS.diagnostico.some(function (d) { return d.alerta; });
+      statusCard.innerHTML = `
+        <div class="status-row">
+          <div>
+            <div class="card-title" style="margin-bottom:4px">Diagnóstico do veículo</div>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0">
+              ${temAlerta ? 'Há indicadores fora da faixa normal. Verifique os detalhes abaixo.' : 'Todos os indicadores dentro dos parâmetros normais.'}
+            </p>
+          </div>
+          <span class="status-badge ${temAlerta ? 'status-medium' : 'status-ok'}">${temAlerta ? 'Atenção' : 'Normal'}</span>
+        </div>`;
+    } else {
+      statusCard.innerHTML = `<p class="metric-disconnected" style="font-size:13px;color:var(--text-secondary)">Veículo não conectado</p>`;
+    }
+
+    // --- MINI INDICADORES (anéis) ---
+    var grid = document.getElementById('indicadores-grid');
+    if (conectado) {
+      var t = DADOS.telemetria;
+      var miniItems = [
+        { id: 'ring-rpm',  label: 'RPM',        valor: t.rpm.toLocaleString('pt-BR'),  ref: '750–3.000',  pct: Math.min(100, Math.round((t.rpm / t.rpmMax) * 100)),          cor: '#C2182B' },
+        { id: 'ring-vel',  label: 'Velocidade',  valor: t.velocidade + ' km/h',         ref: '0–200 km/h', pct: Math.min(100, Math.round((t.velocidade / 200) * 100)),        cor: '#3B82F6' },
+        { id: 'ring-oleo', label: 'Temp. Óleo',  valor: t.tempOleo + ' °C',             ref: 'até 85 °C',  pct: Math.min(100, Math.round((t.tempOleo / 85) * 100)),           cor: t.tempOleo > 85 ? '#C2182B' : '#10B981' },
+        { id: 'ring-liq',  label: 'Temp. Líq.',  valor: t.tempLiquido + ' °C',          ref: 'até 90 °C',  pct: Math.min(100, Math.round((t.tempLiquido / 90) * 100)),        cor: t.tempLiquido > 90 ? '#C2182B' : '#10B981' }
+      ];
+
+      grid.innerHTML = miniItems.map(function (item) {
+        return `<div class="card" style="margin-bottom:0;align-items:center;text-align:center">
+          <div id="${item.id}"></div>
+          <div class="ring-label" style="margin-top:6px">${item.label}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-top:2px">${item.valor}</div>
+          <div style="font-size:10px;color:var(--text-secondary)">ref: ${item.ref}</div>
+        </div>`;
+      }).join('');
+
+      miniItems.forEach(function (item) {
+        renderMiniRing(item.id, item.pct, item.cor);
+      });
+    } else {
+      grid.innerHTML = `<div class="card" style="grid-column:1/-1;margin-bottom:0">
+        <p style="font-size:13px;color:var(--text-secondary);text-align:center">Veículo não conectado</p>
+      </div>`;
+    }
+
+    // --- TABELA DIAGNÓSTICO ---
+    var diagTable = document.getElementById('diag-table');
+    var linhas = DADOS.diagnostico.map(function (d, i) {
+      var isLast = i === DADOS.diagnostico.length - 1;
+      return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
+        <td>${d.indicador}</td>
+        <td class="${d.alerta ? 'td-warn' : ''}">${conectado ? d.valor : '—'}</td>
+        <td style="font-size:11px;color:var(--text-secondary)">${d.referencia}</td>
+        <td style="font-size:12px;color:${d.alerta ? 'var(--primary)' : 'var(--text-secondary)'}">${conectado ? d.observacao : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    diagTable.innerHTML = `
+      <thead>
+        <tr>
+          <th>Indicador</th>
+          <th>Valor</th>
+          <th>Referência</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>`;
+  </script>
+</body>
+</html>

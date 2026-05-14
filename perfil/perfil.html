@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Perfil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <header id="main-header" class="header"></header>
+
+      <main class="content">
+
+        <!-- Avatar + nome -->
+        <div class="profile-hero">
+          <div class="profile-avatar-wrap">
+            <img class="profile-avatar" id="profile-avatar-img"
+                 src="../img/foto-perfil.png"
+                 alt="Foto de perfil"
+                 onerror="this.style.display='none';document.getElementById('avatar-fallback').style.display='flex'">
+            <div class="profile-avatar-fallback" id="avatar-fallback">
+              <svg width="40" height="40" viewBox="0 0 76 76" fill="none" aria-hidden="true">
+                <circle cx="38" cy="29" r="12" stroke="white" stroke-width="2.5"/>
+                <path d="M11 65c0-14.912 12.088-27 27-27s27 12.088 27 27" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="profile-name" id="profile-name"></div>
+          <div class="profile-email" id="profile-email"></div>
+        </div>
+
+        <!-- Informações da conta -->
+        <h2 class="section-title">Informações da conta</h2>
+
+        <div class="card" style="gap:0;padding:0">
+          <div class="profile-field">
+            <label class="field-label" for="field-nome">Nome</label>
+            <input class="field-input field-input-disabled" type="text" id="field-nome" disabled>
+          </div>
+          <div class="profile-field-divider"></div>
+          <div class="profile-field">
+            <label class="field-label" for="field-email">E-mail</label>
+            <input class="field-input field-input-disabled" type="email" id="field-email" disabled>
+          </div>
+          <div class="profile-field-divider"></div>
+          <div class="profile-field">
+            <label class="field-label" for="field-senha">Senha</label>
+            <input class="field-input field-input-disabled" type="password" id="field-senha" value="••••••••" disabled>
+          </div>
+        </div>
+
+        <a href="../login/recuperar-senha.html" class="profile-change-pw" style="text-align:left;padding-left:4px">Alterar senha</a>
+
+        <!-- Veículo -->
+        <h2 class="section-title mt-20">Veículo conectado</h2>
+
+        <div class="card" id="veiculo-card"></div>
+
+        <!-- Ações -->
+        <h2 class="section-title mt-20">Conta</h2>
+
+        <div class="card" style="display:flex;flex-direction:column;gap:12px">
+          <button class="btn btn-outline" id="btn-desconectar">Desconectar veículo</button>
+          <button class="btn btn-danger" id="btn-sair">Sair</button>
+        </div>
+
+      </main>
+
+      <nav id="bottom-nav" class="bottom-nav"></nav>
+    </div>
+  </div>
+
+  <!-- Modal: confirmar desconectar -->
+  <div class="modal-overlay hidden" id="modal-desconectar" role="dialog" aria-modal="true" aria-labelledby="modal-desc-titulo">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-desc-titulo">Desconectar veículo</span>
+        <button class="modal-close" id="fechar-modal-desc" aria-label="Fechar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <p style="font-size:14px;color:var(--text-secondary);margin:0 0 20px">
+        Deseja desconectar o veículo <strong id="modal-veiculo-nome"></strong>? Os dados de telemetria não serão mais exibidos.
+      </p>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" style="flex:1" id="btn-cancelar-desc">Cancelar</button>
+        <button class="btn btn-danger" style="flex:1" id="btn-confirmar-desc">Desconectar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    verificarAuth();
+
+    var conectado = estaConectado();
+
+    renderHeader({
+      greeting: 'Perfil',
+      vehicle: DADOS.veiculo.modelo
+    });
+    renderBottomNav('perfil');
+
+    // --- DADOS DO USUÁRIO ---
+    document.getElementById('profile-name').textContent  = DADOS.usuario.nome;
+    document.getElementById('profile-email').textContent = DADOS.usuario.email;
+    document.getElementById('field-nome').value          = DADOS.usuario.nome;
+    document.getElementById('field-email').value         = DADOS.usuario.email;
+
+    // --- VEÍCULO ---
+    var veiculoCard = document.getElementById('veiculo-card');
+    if (conectado) {
+      var v = DADOS.veiculo;
+      veiculoCard.innerHTML = `
+        <div class="veiculo-row">
+          <div>
+            <div class="card-title">${v.modelo}</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${v.placa}</div>
+          </div>
+          <span class="status-badge status-ok">Conectado</span>
+        </div>`;
+    } else {
+      veiculoCard.innerHTML = `
+        <div class="veiculo-row">
+          <div>
+            <div class="card-title">${DADOS.veiculo.modelo}</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${DADOS.veiculo.placa}</div>
+          </div>
+          <span class="status-badge status-high">Desconectado</span>
+        </div>`;
+    }
+
+    // --- DESCONECTAR ---
+    var btnDesc = document.getElementById('btn-desconectar');
+
+    if (!conectado) {
+      btnDesc.textContent = 'Conectar veículo';
+    }
+
+    btnDesc.addEventListener('click', function () {
+      if (!conectado) {
+        conectarVeiculo();
+        return;
+      }
+      document.getElementById('modal-veiculo-nome').textContent = DADOS.veiculo.modelo;
+      document.getElementById('modal-desconectar').classList.remove('hidden');
+    });
+
+    document.getElementById('fechar-modal-desc').addEventListener('click', function () {
+      document.getElementById('modal-desconectar').classList.add('hidden');
+    });
+
+    document.getElementById('btn-cancelar-desc').addEventListener('click', function () {
+      document.getElementById('modal-desconectar').classList.add('hidden');
+    });
+
+    document.getElementById('btn-confirmar-desc').addEventListener('click', function () {
+      document.getElementById('modal-desconectar').classList.add('hidden');
+      desconectarVeiculo();
+    });
+
+    // --- SAIR ---
+    document.getElementById('btn-sair').addEventListener('click', function () {
+      fazerLogout();
+    });
+  </script>
+</body>
+</html>
