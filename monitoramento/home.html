@@ -86,6 +86,7 @@
 
   <script src="../js/dados.js"></script>
   <script src="../js/app.js"></script>
+  <script src="../js/api.js"></script>
   <script>
     verificarAuth();
 
@@ -96,7 +97,8 @@
 
     var conectado = estaConectado();
 
-    renderHeader({ greeting: 'Bom dia, ' + DADOS.usuario.nome, vehicle: DADOS.veiculo.modelo });
+    var nomeUsuario = primeiroNome(usuarioSessao().name);
+    renderHeader({ greeting: 'Bom dia' + (nomeUsuario ? ', ' + escapeHtml(nomeUsuario) : ''), vehicle: DADOS.veiculo.modelo });
     renderBottomNav('home');
 
     // Ícones de chevron
@@ -114,7 +116,7 @@
       heroPainel.innerHTML = `
         <img src="${DADOS.veiculo.foto}" alt="Foto do veículo ${DADOS.veiculo.modelo}" class="hero-img">
         <div class="hero-overlay">
-          <button class="hero-connect-btn hero-disconnect-btn" onclick="desconectarVeiculo()">
+          <button class="hero-connect-btn hero-disconnect-btn" id="btn-hero-desconectar">
             ${icoBt} Desconectar
           </button>
         </div>`;
@@ -126,6 +128,19 @@
             ${icoBt} Conectar ao veículo
           </button>
         </div>`;
+    }
+
+    var btnHeroDesc = document.getElementById('btn-hero-desconectar');
+    if (btnHeroDesc) {
+      btnHeroDesc.addEventListener('click', async function () {
+        btnHeroDesc.disabled = true;
+        try {
+          await desconectarVeiculo();
+        } catch (err) {
+          alert(err.message || 'Não foi possível desconectar o veículo.');
+          btnHeroDesc.disabled = false;
+        }
+      });
     }
 
     // --- TEMPERATURAS (SVG icons) ---

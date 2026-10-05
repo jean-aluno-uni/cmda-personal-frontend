@@ -11,21 +11,17 @@ Projeto desenvolvido pelo grupo CMDA no curso de Engenharia de Software.
 ## Como executar
 
 1. Faça o download ou clone o repositório
-2. Abra a pasta `web/` com qualquer servidor HTTP local. Exemplos:
-   - **VS Code:** instale a extensão *Live Server* → clique em "Go Live"
-   - **Python:** `python -m http.server 5500` dentro da pasta `web/`
-   - **Node.js:** `npx serve web`
-3. Acesse `http://localhost:5500` no navegador
-4. Na tela de login, use as credenciais abaixo e clique em **Entrar**
+2. Na raiz do projeto, instale as dependências e inicie o servidor:
+   ```bash
+   npm install
+   npm start
+   ```
+3. Acesse `http://localhost:8080/login/` no navegador
+4. Entre com uma conta existente ou clique em **Criar conta**
 
-### Credenciais de acesso
+### API
 
-| Campo | Valor |
-|-------|-------|
-| Usuário | `Amanda Pereira` (já preenchido) |
-| Senha | qualquer valor, ex: `123456` |
-
-> A autenticação é simulada — qualquer senha não-vazia é aceita.
+O frontend consome a API em `http://localhost:3000` (configurável em `js/api.js` ou definindo `window.SF_API_URL`). O backend precisa liberar CORS para `http://localhost:8080`.
 
 > Não abra os arquivos `.html` diretamente pelo sistema de arquivos (protocolo `file://`), pois alguns navegadores bloqueiam scripts nesse modo.
 

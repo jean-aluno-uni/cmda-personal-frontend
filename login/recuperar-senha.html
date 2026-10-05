@@ -34,19 +34,21 @@
           Informe seu e-mail e enviaremos um código de verificação para redefinição de senha.
         </p>
 
-        <div class="field">
-          <label class="field-label" for="email">E-mail</label>
-          <input class="field-input" type="email" id="email"
-                 placeholder="seu@email.com"
-                 value="Amanda.Pereira@gmail.com"
-                 autocomplete="email">
-        </div>
+        <form id="form-recuperar" novalidate>
+          <div class="field">
+            <label class="field-label" for="email">E-mail</label>
+            <input class="field-input" type="email" id="email"
+                   placeholder="seu@email.com"
+                   autocomplete="email" inputmode="email"
+                   autocapitalize="off" spellcheck="false">
+          </div>
 
-        <p id="msg-erro" class="mt-8 text-red hidden" style="font-size:13px"></p>
+          <p id="msg-erro" class="mt-8 text-red hidden" style="font-size:13px" role="alert"></p>
 
-        <div class="mt-24">
-          <button class="btn btn-primary" id="btn-recuperar">Enviar código</button>
-        </div>
+          <div class="mt-24">
+            <button type="submit" class="btn btn-primary" id="btn-recuperar">Enviar código</button>
+          </div>
+        </form>
 
       </main>
     </div>
@@ -54,26 +56,44 @@
 
   <script src="../js/dados.js"></script>
   <script src="../js/app.js"></script>
+  <script src="../js/api.js"></script>
   <script>
-    document.getElementById('btn-recuperar').addEventListener('click', function () {
-      var email   = document.getElementById('email').value.trim();
-      var msgErro = document.getElementById('msg-erro');
+    var btn     = document.getElementById('btn-recuperar');
+    var msgErro = document.getElementById('msg-erro');
+
+    function mostrarErro(texto) {
+      msgErro.textContent = texto;
+      msgErro.classList.remove('hidden');
+    }
+
+    document.getElementById('form-recuperar').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var email = document.getElementById('email').value.trim();
 
       if (!email) {
-        msgErro.textContent = 'Informe o e-mail.';
-        msgErro.classList.remove('hidden');
+        mostrarErro('Informe o e-mail.');
         return;
       }
 
       if (!email.includes('@')) {
-        msgErro.textContent = 'Informe um e-mail válido.';
-        msgErro.classList.remove('hidden');
+        mostrarErro('Informe um e-mail válido.');
         return;
       }
 
       msgErro.classList.add('hidden');
-      sessionStorage.setItem('sf_email_otp', email);
-      window.location.href = ROTAS.otp;
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      try {
+        await API.esqueciSenha(email);
+        sessionStorage.setItem(SESSAO.resetEmail, email);
+        sessionStorage.removeItem(SESSAO.resetToken);
+        window.location.href = ROTAS.otp;
+      } catch (err) {
+        mostrarErro(err.message || 'Não foi possível enviar o código. Tente novamente.');
+        btn.disabled = false;
+        btn.textContent = 'Enviar código';
+      }
     });
   </script>
 </body>

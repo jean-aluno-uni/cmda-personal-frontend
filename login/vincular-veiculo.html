@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMDA SmartFleet — Vincular Veículo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="page">
+
+      <!-- Header Auth -->
+      <header class="header-auth">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 17h14M5 17a2 2 0 01-2-2v-3l2.5-5h13L21 12v3a2 2 0 01-2 2M5 17v2M19 17v2"/>
+          <circle cx="7.5" cy="13.5" r="1"/>
+          <circle cx="16.5" cy="13.5" r="1"/>
+        </svg>
+        <h1>Vincular veículo</h1>
+        <p id="subtitulo">Etapa 2 de 2 · Seu veículo</p>
+      </header>
+
+      <!-- Sheet -->
+      <main class="auth-sheet">
+
+        <a href="../perfil/perfil.html" class="auth-back hidden" id="link-voltar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+          Voltar ao perfil
+        </a>
+
+        <p class="auth-desc">
+          Informe os dados do veículo que você quer acompanhar. Você poderá conectá-lo depois pela tela inicial.
+        </p>
+
+        <form id="form-vincular" novalidate>
+
+          <div class="field">
+            <label class="field-label" for="modelo">Modelo</label>
+            <input class="field-input" type="text" id="modelo" name="modelo"
+                   placeholder="Ex.: Hyundai HB20" autocomplete="off" autocapitalize="words">
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="placa">Placa</label>
+            <input class="field-input" type="text" id="placa" name="placa"
+                   placeholder="ABC1D23" maxlength="8" autocomplete="off"
+                   autocapitalize="characters" spellcheck="false"
+                   aria-describedby="placa-dica" style="text-transform:uppercase">
+            <p class="field-hint" id="placa-dica">Padrão Mercosul (ABC1D23) ou antigo (ABC-1234)</p>
+          </div>
+
+          <p id="msg-erro" class="mb-16 text-red hidden" style="font-size:13px" role="alert"></p>
+
+          <button type="submit" class="btn btn-primary" id="btn-vincular">Vincular veículo</button>
+
+        </form>
+
+        <p class="auth-footer" id="rodape-pular">
+          <a href="../monitoramento/home.html">Pular por enquanto</a>
+        </p>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="../js/dados.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/api.js"></script>
+  <script>
+    verificarAuth();
+
+    // Vindo do perfil: mostra "voltar" em vez da etapa do cadastro
+    if (new URLSearchParams(location.search).get('origem') === 'perfil') {
+      document.getElementById('subtitulo').textContent = 'Adicione o veículo à sua conta';
+      document.getElementById('link-voltar').classList.remove('hidden');
+      document.getElementById('rodape-pular').classList.add('hidden');
+    }
+
+    var btn     = document.getElementById('btn-vincular');
+    var msgErro = document.getElementById('msg-erro');
+
+    function mostrarErro(texto) {
+      msgErro.textContent = texto;
+      msgErro.classList.remove('hidden');
+    }
+
+    document.getElementById('form-vincular').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var modelo = document.getElementById('modelo').value.trim();
+      var placa  = document.getElementById('placa').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+      if (!modelo || !placa) {
+        mostrarErro('Preencha todos os campos.');
+        return;
+      }
+      if (!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(placa)) {
+        mostrarErro('Informe uma placa válida.');
+        return;
+      }
+
+      msgErro.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Vinculando...';
+
+      try {
+        var veiculo = await API.vincularVeiculo(modelo, placa);
+        if (!veiculo || veiculo.id === undefined) throw new ApiError(500, 'Resposta de vinculação sem id do veículo.');
+        salvarVeiculoSessao(veiculo);
+        window.location.href = ROTAS.home;
+      } catch (err) {
+        if (err.status === 409) {
+          mostrarErro('Este veículo já está vinculado a outra conta.');
+        } else {
+          mostrarErro(err.message || 'Não foi possível vincular o veículo. Tente novamente.');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Vincular veículo';
+      }
+    });
+  </script>
+</body>
+</html>
