@@ -7,6 +7,8 @@ const ROTAS = {
   recuperarSenha: '../login/recuperar-senha.html',
   otp: '../login/otp.html',
   novaSenha: '../login/nova-senha.html',
+  cadastro: '../login/cadastro.html',
+  vincularVeiculo: '../login/vincular-veiculo.html',
   home: '../monitoramento/home.html',
   condicoesMotor: '../monitoramento/condicoes-motor.html',
   rpm: '../monitoramento/rpm.html',
@@ -16,21 +18,153 @@ const ROTAS = {
 };
 
 function verificarAuth() {
-  if (!sessionStorage.getItem('sf_logado')) {
+  if (!sessionStorage.getItem('sf_token')) {
     window.location.href = ROTAS.login;
   }
 }
 
-function fazerLogin() {
-  sessionStorage.setItem('sf_logado', 'true');
-  sessionStorage.setItem('sf_conectado', DADOS.veiculo.conectado ? 'true' : 'false');
-  // console.log('login ok, redirecionando...')
-  window.location.href = ROTAS.home;
-}
-
-function fazerLogout() {
+async function fazerLogout() {
+  try {
+    await API.logout();
+  } catch (e) {
+    // sessão é limpa mesmo se o servidor falhar
+  }
   sessionStorage.clear();
   window.location.href = ROTAS.login;
+}
+
+// salva o veículo na sessão (aceita connected ou conectado)
+function salvarVeiculoSessao(veiculo) {
+  const conectado = veiculo.connected !== undefined ? veiculo.connected : veiculo.conectado;
+  sessionStorage.setItem('sf_vehicle_id', veiculo.id);
+  sessionStorage.setItem('sf_conectado', conectado ? 'true' : 'false');
+}
+
+// --- usuário da sessão ---
+
+function salvarUsuarioSessao(usuario) {
+  sessionStorage.setItem('sf_user', JSON.stringify({
+    name: usuario.name || usuario.nome || '',
+    email: usuario.email || '',
+    avatarUrl: usuario.avatarUrl || usuario.avatar || usuario.photoUrl || usuario.foto || ''
+  }));
+}
+
+function usuarioSessao() {
+  try {
+    return JSON.parse(sessionStorage.getItem('sf_user')) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function primeiroNome(nome) {
+  return String(nome || '').trim().split(/\s+/)[0] || '';
+}
+
+// --- avatar por gênero do primeiro nome ---
+
+const NOMES_MASCULINOS = new Set(('lucas joao jose pedro gabriel miguel arthur rafael gustavo felipe matheus mateus ' +
+  'bruno carlos eduardo daniel marcos marcelo paulo luiz luis fernando ricardo rodrigo andre antonio francisco ' +
+  'diego thiago tiago leonardo vinicius henrique caio enzo samuel davi david heitor bernardo lorenzo theo ' +
+  'murilo nicolas guilherme igor otavio renato roberto sergio julio cesar fabio alexandre leandro anderson ' +
+  'wesley william jonas joel raul ruan vitor victor hugo luan kaique kaua breno benjamin isaac noah ' +
+  'emanuel manuel joaquim augusto alberto alvaro adriano claudio mauricio mario wagner wellington everton ' +
+  'edson gilberto geraldo sebastiao raimundo severino benedito valdir osvaldo reinaldo ronaldo rogerio ' +
+  'luca nikolas yuri artur cristiano denis douglas elias erick fabricio flavio gilson ivan jorge josue ' +
+  'lauro leo levi marco moises nelson nilton oscar pablo patrick ramon ryan silvio tales thomas tomas ' +
+  'ulisses valter walter washington xavier').split(' '));
+
+const NOMES_FEMININOS = new Set(('maria ana julia juliana beatriz larissa amanda fernanda patricia camila ' +
+  'gabriela mariana leticia bruna carolina aline vanessa jessica natalia isabela isabel sofia sophia alice ' +
+  'laura helena valentina manuela luiza luisa heloisa giovanna giovana lara livia cecilia clara lorena ' +
+  'yasmin rebeca sarah sara raquel renata adriana cristina claudia simone sandra marcia monica luciana ' +
+  'daniela debora priscila tatiane tatiana viviane elaine rosana rosangela silvia sonia vera regina ' +
+  'lucia francisca antonia josefa joana marta rita teresa tereza paula carla bianca barbara flavia ' +
+  'karina carina kelly michele michelle sabrina thais thaina vitoria victoria eduarda emanuelly emily ' +
+  'agatha melissa nicole olivia pietra rafaela stella esther ester lavinia milena marina jaqueline ' +
+  'jacqueline denise eliane edna gloria ines irene ivone lais lidia luana mirela nathalia noemi ' +
+  'roberta samara suzana talita tamires vitoria yara zilda').split(' '));
+
+// nomes usados para ambos os gêneros: avatar neutro
+const NOMES_AMBIGUOS = new Set(('andrea ariel darci juraci kim alison allison jordan sasha ' +
+  'cris dani gabi alex sam elis jaci noa ivy').split(' '));
+
+function normalizarNome(nome) {
+  return primeiroNome(nome).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// retorna 'm', 'f' ou null quando não dá para identificar
+function generoPorNome(nome) {
+  const n = normalizarNome(nome);
+  if (!n || NOMES_AMBIGUOS.has(n)) return null;
+  if (NOMES_MASCULINOS.has(n)) return 'm';
+  if (NOMES_FEMININOS.has(n)) return 'f';
+  if (/a$/.test(n)) return 'f';
+  if (/o$/.test(n)) return 'm';
+  return null;
+}
+
+function avatarSvg(genero) {
+  const pele = '#F1C27D';
+  const cabelo = '#3B2A20';
+  const corpo = '<path d="M8 66c0-14 11-22 24-22s24 8 24 22z" fill="#C2182B"/>' +
+                `<rect x="27" y="35" width="10" height="11" rx="4" fill="${pele}"/>`;
+  const cabeca = `<circle cx="32" cy="26" r="12" fill="${pele}"/>`;
+  let conteudo;
+
+  if (genero === 'm') {
+    conteudo = corpo + cabeca +
+      `<path d="M19.5 25c0-9 5.5-14.5 12.5-14.5S44.5 16 44.5 25c-2.5-4.5-7-6.5-12.5-6.5S22 20.5 19.5 25z" fill="${cabelo}"/>`;
+  } else if (genero === 'f') {
+    conteudo = `<path d="M17 29c0-12 6.5-18.5 15-18.5S47 17 47 29v16c-3 2-7 2.5-10 1V31H27v15c-3 1.5-7 1-10-1z" fill="${cabelo}"/>` +
+      corpo + cabeca +
+      `<path d="M19.5 27c1-9 6-14 12.5-14s11.5 5 12.5 14c-5.5-1-10.5-4-12.5-8.5-2 4.5-7 7.5-12.5 8.5z" fill="${cabelo}"/>`;
+  } else {
+    conteudo = '<circle cx="32" cy="25" r="11" fill="#FFFFFF" opacity="0.9"/>' +
+               '<path d="M10 66c0-13 10-21 22-21s22 8 22 21z" fill="#FFFFFF" opacity="0.9"/>';
+  }
+
+  const fundo = genero ? '#F3E3E5' : '#B8BFCA';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${fundo}"/>${conteudo}</svg>`;
+}
+
+// foto da api tem prioridade; senão, avatar ilustrado pelo nome
+function avatarUrl(nome, fotoApi) {
+  if (fotoApi) return fotoApi;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(avatarSvg(generoPorNome(nome)));
+}
+
+// regras de senha usadas no cadastro e na redefinição
+const REGRAS_SENHA = [
+  { label: 'Mínimo 8 caracteres',         fn: v => v.length >= 8 },
+  { label: '1 letra minúscula',            fn: v => /[a-z]/.test(v) },
+  { label: '1 letra maiúscula',            fn: v => /[A-Z]/.test(v) },
+  { label: '1 número',                     fn: v => /[0-9]/.test(v) },
+  { label: '1 caractere especial (!@#$%)', fn: v => /[^A-Za-z0-9]/.test(v) }
+];
+
+function senhaValida(senha) {
+  return REGRAS_SENHA.every(r => r.fn(senha));
+}
+
+function renderRegrasSenha(idContainer, senha) {
+  const el = document.getElementById(idContainer);
+  if (!el) return;
+  el.innerHTML = REGRAS_SENHA.map(r => {
+    const estado = senha.length === 0 ? 'idle' : (r.fn(senha) ? 'ok' : 'fail');
+    return `<div class="pw-rule"><span class="pw-dot ${estado}"></span><span>${r.label}</span></div>`;
+  }).join('');
+}
+
+// escapa texto vindo da api antes de interpolar em innerHTML
+function escapeHtml(valor) {
+  return String(valor == null ? '' : valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function estaConectado() {
@@ -42,7 +176,10 @@ function conectarVeiculo() {
   window.location.reload();
 }
 
-function desconectarVeiculo() {
+// chama a api antes de atualizar o estado local; erros sobem para quem chamou
+async function desconectarVeiculo() {
+  const id = sessionStorage.getItem('sf_vehicle_id');
+  if (id) await API.desconectarVeiculo(id);
   sessionStorage.setItem('sf_conectado', 'false');
   window.location.href = ROTAS.home;
 }
@@ -134,6 +271,7 @@ function renderHeader(config) {
   if (!el) return;
 
   const contAlertas = DADOS.alertas.filter(a => a.nivel === 'high').length;
+  const usuario = usuarioSessao();
 
   const btnEsq = config.back
     ? `<a href="${typeof config.back === 'string' ? config.back : ROTAS.home}" class="header-back" aria-label="Voltar">${icoBack()}</a>`
@@ -148,8 +286,10 @@ function renderHeader(config) {
       <div class="header-actions">
         <a href="${ROTAS.alertas}" class="header-bell" aria-label="Ver alertas">${icoBell()}${badge}</a>
         <a href="${ROTAS.perfil}" class="header-avatar" aria-label="Ver perfil">
-          <img src="${DADOS.usuario.foto}" alt="Foto de perfil de ${DADOS.usuario.nome}"
-               onerror="this.style.display='none';this.parentElement.innerHTML='<svg width=36 height=36 viewBox=\\'0 0 36 36\\' fill=\\'none\\'><circle cx=\\'18\\' cy=\\'18\\' r=\\'18\\' fill=\\'rgba(255,255,255,0.25)\\'/><circle cx=\\'18\\' cy=\\'14\\' r=\\'6\\' fill=\\'white\\' opacity=\\'0.85\\'/><path d=\\'M5 34c0-7.18 5.82-13 13-13s13 5.82 13 13\\' stroke=\\'white\\' stroke-width=\\'1.5\\' stroke-linecap=\\'round\\' fill=\\'none\\' opacity=\\'0.85\\'/></svg>'">
+          <img src="${escapeHtml(avatarUrl(usuario.name, usuario.avatarUrl))}"
+               alt="Foto de perfil${usuario.name ? ' de ' + escapeHtml(usuario.name) : ''}"
+               data-fallback="${escapeHtml(avatarUrl(usuario.name))}"
+               onerror="this.onerror=null;this.src=this.dataset.fallback">
         </a>
       </div>
     </div>

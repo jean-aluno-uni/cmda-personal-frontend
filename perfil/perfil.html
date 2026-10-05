@@ -20,10 +20,7 @@
         <!-- Avatar + nome -->
         <div class="profile-hero">
           <div class="profile-avatar-wrap">
-            <img class="profile-avatar" id="profile-avatar-img"
-                 src="../img/foto-perfil.png"
-                 alt="Foto de perfil"
-                 onerror="this.style.display='none';document.getElementById('avatar-fallback').style.display='flex'">
+            <img class="profile-avatar" id="profile-avatar-img" alt="Foto de perfil">
             <div class="profile-avatar-fallback" id="avatar-fallback">
               <svg width="40" height="40" viewBox="0 0 76 76" fill="none" aria-hidden="true">
                 <circle cx="38" cy="29" r="12" stroke="white" stroke-width="2.5"/>
@@ -97,77 +94,143 @@
 
   <script src="../js/dados.js"></script>
   <script src="../js/app.js"></script>
+  <script src="../js/api.js"></script>
   <script>
     verificarAuth();
 
+    var veiculoId = sessionStorage.getItem(SESSAO.veiculoId);
+    var veiculo   = null;
     var conectado = estaConectado();
 
-    renderHeader({
-      greeting: 'Perfil',
-      vehicle: DADOS.veiculo.modelo
-    });
+    renderHeader({ greeting: 'Perfil' });
     renderBottomNav('perfil');
 
+    var veiculoCard = document.getElementById('veiculo-card');
+    var btnDesc     = document.getElementById('btn-desconectar');
+
     // --- DADOS DO USUÁRIO ---
-    document.getElementById('profile-name').textContent  = DADOS.usuario.nome;
-    document.getElementById('profile-email').textContent = DADOS.usuario.email;
-    document.getElementById('field-nome').value          = DADOS.usuario.nome;
-    document.getElementById('field-email').value         = DADOS.usuario.email;
+    var avatarImg = document.getElementById('profile-avatar-img');
+
+    // foto da api que falhar ao carregar cai para o avatar ilustrado
+    function mostrarAvatar(nome, foto) {
+      avatarImg.onerror = function () {
+        avatarImg.onerror = null;
+        avatarImg.src = avatarUrl(nome);
+      };
+      avatarImg.src = avatarUrl(nome, foto);
+      avatarImg.alt = nome ? 'Foto de perfil de ' + nome : 'Foto de perfil';
+    }
+
+    var usuarioCache = usuarioSessao();
+    mostrarAvatar(usuarioCache.name, usuarioCache.avatarUrl);
+    document.getElementById('profile-name').textContent = usuarioCache.name || 'Carregando...';
+
+    async function carregarUsuario() {
+      try {
+        var u = await API.usuarioAtual();
+        salvarUsuarioSessao(u);
+        var usuario = usuarioSessao();
+
+        document.getElementById('profile-name').textContent  = usuario.name;
+        document.getElementById('profile-email').textContent = usuario.email;
+        document.getElementById('field-nome').value          = usuario.name;
+        document.getElementById('field-email').value         = usuario.email;
+        mostrarAvatar(usuario.name, usuario.avatarUrl);
+        renderHeader({ greeting: 'Perfil', vehicle: veiculo ? escapeHtml(veiculo.model || veiculo.modelo || '') : undefined });
+      } catch (err) {
+        document.getElementById('profile-name').textContent  = 'Não foi possível carregar o perfil';
+        document.getElementById('profile-email').textContent = err.message || '';
+      }
+    }
 
     // --- VEÍCULO ---
-    var veiculoCard = document.getElementById('veiculo-card');
-    if (conectado) {
-      var v = DADOS.veiculo;
+    function renderVeiculo() {
+      if (!veiculo) return;
+      var modelo = veiculo.model || veiculo.modelo || 'Veículo';
+      var placa  = veiculo.plate || veiculo.placa || '—';
+
       veiculoCard.innerHTML = `
         <div class="veiculo-row">
           <div>
-            <div class="card-title">${v.modelo}</div>
-            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${v.placa}</div>
+            <div class="card-title">${escapeHtml(modelo)}</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${escapeHtml(placa)}</div>
           </div>
-          <span class="status-badge status-ok">Conectado</span>
+          <span class="status-badge ${conectado ? 'status-ok' : 'status-high'}">${conectado ? 'Conectado' : 'Desconectado'}</span>
         </div>`;
-    } else {
-      veiculoCard.innerHTML = `
-        <div class="veiculo-row">
-          <div>
-            <div class="card-title">${DADOS.veiculo.modelo}</div>
-            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${DADOS.veiculo.placa}</div>
-          </div>
-          <span class="status-badge status-high">Desconectado</span>
-        </div>`;
+
+      renderHeader({ greeting: 'Perfil', vehicle: escapeHtml(modelo) });
+      btnDesc.textContent = conectado ? 'Desconectar veículo' : 'Conectar veículo';
+      btnDesc.disabled = false;
     }
+
+    function mensagemVeiculo(texto) {
+      veiculoCard.innerHTML = `<p style="font-size:13px;color:var(--text-secondary)">${escapeHtml(texto)}</p>`;
+    }
+
+    async function carregarVeiculo() {
+      btnDesc.disabled = true;
+      if (!veiculoId) {
+        veiculoCard.innerHTML = `
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Nenhum veículo vinculado à sua conta.</p>
+          <a href="${ROTAS.vincularVeiculo}?origem=perfil" class="btn btn-outline">Vincular veículo</a>`;
+        return;
+      }
+      mensagemVeiculo('Carregando...');
+      try {
+        veiculo = await API.veiculo(veiculoId);
+        var status = veiculo.connected !== undefined ? veiculo.connected : veiculo.conectado;
+        if (status !== undefined) {
+          conectado = !!status;
+          sessionStorage.setItem(SESSAO.conectado, conectado ? 'true' : 'false');
+        }
+        renderVeiculo();
+      } catch (err) {
+        mensagemVeiculo(err.message || 'Não foi possível carregar o veículo.');
+      }
+    }
+
+    carregarUsuario();
+    carregarVeiculo();
 
     // --- DESCONECTAR ---
-    var btnDesc = document.getElementById('btn-desconectar');
-
-    if (!conectado) {
-      btnDesc.textContent = 'Conectar veículo';
-    }
+    var modalDesc = document.getElementById('modal-desconectar');
+    var btnConfirmarDesc = document.getElementById('btn-confirmar-desc');
 
     btnDesc.addEventListener('click', function () {
       if (!conectado) {
         conectarVeiculo();
         return;
       }
-      document.getElementById('modal-veiculo-nome').textContent = DADOS.veiculo.modelo;
-      document.getElementById('modal-desconectar').classList.remove('hidden');
+      document.getElementById('modal-veiculo-nome').textContent = veiculo.model || veiculo.modelo || '';
+      modalDesc.classList.remove('hidden');
     });
 
-    document.getElementById('fechar-modal-desc').addEventListener('click', function () {
-      document.getElementById('modal-desconectar').classList.add('hidden');
-    });
+    function fecharModalDesc() {
+      modalDesc.classList.add('hidden');
+    }
 
-    document.getElementById('btn-cancelar-desc').addEventListener('click', function () {
-      document.getElementById('modal-desconectar').classList.add('hidden');
-    });
+    document.getElementById('fechar-modal-desc').addEventListener('click', fecharModalDesc);
+    document.getElementById('btn-cancelar-desc').addEventListener('click', fecharModalDesc);
 
-    document.getElementById('btn-confirmar-desc').addEventListener('click', function () {
-      document.getElementById('modal-desconectar').classList.add('hidden');
-      desconectarVeiculo();
+    btnConfirmarDesc.addEventListener('click', async function () {
+      btnConfirmarDesc.disabled = true;
+      btnConfirmarDesc.textContent = 'Desconectando...';
+      try {
+        await desconectarVeiculo();
+        fecharModalDesc();
+      } catch (err) {
+        fecharModalDesc();
+        alert(err.message || 'Não foi possível desconectar o veículo.');
+      }
+      btnConfirmarDesc.disabled = false;
+      btnConfirmarDesc.textContent = 'Desconectar';
     });
 
     // --- SAIR ---
-    document.getElementById('btn-sair').addEventListener('click', function () {
+    var btnSair = document.getElementById('btn-sair');
+    btnSair.addEventListener('click', function () {
+      btnSair.disabled = true;
+      btnSair.textContent = 'Saindo...';
       fazerLogout();
     });
   </script>
