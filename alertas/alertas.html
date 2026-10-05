@@ -72,127 +72,175 @@
     </div>
   </div>
 
-  <script src="../js/dados.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
   <script src="../js/app.js"></script>
   <script>
-    verificarAuth();
+    // modelo de tela integrada: verificarAuth -> le o id do veiculo -> apiCall nas rotas -> renderiza
+    // enquanto espera mostra "Carregando...", se der erro mostra a mensagem que veio da API
+    // alertas sao historico gravado no banco, entao aparecem mesmo com o veiculo desconectado
 
-    var conectado = estaConectado();
-
-    renderHeader({
-      back: ROTAS.home,
-      greeting: 'Alertas',
-      vehicle: DADOS.veiculo.modelo
-    });
-    renderBottomNav('');
+    var LABEL_PERIODO = { '24h': 'nas últimas 24 horas', '7d': 'nos últimos 7 dias', '30d': 'nos últimos 30 dias' };
+    var CABECALHO_TABELA = '<thead><tr><th>Descricao</th><th>Tempo</th><th>Local</th></tr></thead>';
 
     var periodoAtivo = '24h';
+    var veiculoId = null;
 
-    function getDados() {
-      return DADOS.alertasPorPeriodo[periodoAtivo] || DADOS.alertasPorPeriodo['24h'];
+    function base() {
+      return '/vehicles/' + veiculoId;
+    }
+
+    // nome do veiculo no header
+    async function carregarVeiculo() {
+      try {
+        var veiculo = await apiCall(base());
+        renderHeader({ back: ROTAS.home, greeting: 'Alertas', vehicle: veiculo.modelo });
+        atualizarBadgeAlertas(veiculoId);
+      } catch (e) {
+        // header sem o nome do veiculo nao impede o resto da tela
+      }
     }
 
     // --- SELETOR DE PERÍODO ---
     var btns = document.querySelectorAll('.period-btn');
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener('click', function () {
+        if (!veiculoId) return;
         for (var j = 0; j < btns.length; j++) { btns[j].classList.remove('active'); }
         this.classList.add('active');
         periodoAtivo = this.getAttribute('data-period');
-        renderCharts();
-        renderTabela();
+        carregarResumo();
       });
     }
 
-    // --- DONUT + LEGENDA ---
-    function renderCharts() {
-      var d = getDados();
-
-      if (conectado) {
-        document.getElementById('donut-total').textContent = d.total;
-
-        renderDonutChart('donut-chart', d.origemAlertas.map(function (o) {
-          return { percentual: o.percentual, cor: o.cor };
-        }), 130);
-
-        var legendHTML = '';
-        for (var i = 0; i < d.origemAlertas.length; i++) {
-          var o = d.origemAlertas[i];
-          legendHTML += '<div class="alerta-legend-item">' +
-            '<span style="width:10px;height:10px;border-radius:50%;background:' + o.cor + ';display:inline-block;flex-shrink:0"></span>' +
-            '<div>' +
-              '<div class="alerta-legend-local">' + o.local + '</div>' +
-              '<div class="alerta-legend-pct">' + o.percentual.toFixed(1) + '%</div>' +
-            '</div>' +
-          '</div>';
-        }
-        document.getElementById('donut-legend').innerHTML = legendHTML;
-
-      } else {
-        document.getElementById('donut-total').textContent = '—';
-        renderDonutChart('donut-chart', [{ percentual: 100, cor: '#E5E7EB' }], 130);
-        document.getElementById('donut-legend').innerHTML =
-          '<p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Conecte o veículo para ver os dados</p>';
+    // GET /vehicles/{id}/alerts/summary?period=... -> donut + tabela
+    async function carregarResumo() {
+      var periodo = periodoAtivo;
+      mostrarCarregando();
+      try {
+        var resumo = await apiCall(base() + '/alerts/summary?period=' + periodo);
+        if (periodo !== periodoAtivo) return; // usuario ja trocou de periodo
+        renderCharts(resumo);
+        renderTabela(resumo.tabelaAlertas);
+      } catch (e) {
+        if (periodo !== periodoAtivo) return;
+        mostrarErro(e.message);
       }
     }
 
+    function mostrarCarregando() {
+      document.getElementById('donut-total').textContent = '…';
+      renderDonutChart('donut-chart', [{ percentual: 100, cor: '#E5E7EB' }], 130);
+      document.getElementById('donut-legend').innerHTML =
+        '<p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Carregando...</p>';
+      document.getElementById('alertas-table').innerHTML = CABECALHO_TABELA +
+        '<tbody><tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:20px;font-size:13px">Carregando...</td></tr></tbody>';
+    }
+
+    function mostrarErro(mensagem) {
+      document.getElementById('donut-total').textContent = '—';
+      renderDonutChart('donut-chart', [{ percentual: 100, cor: '#E5E7EB' }], 130);
+      document.getElementById('donut-legend').innerHTML =
+        '<p style="font-size:12px;color:var(--primary);margin-top:4px">' + esc(mensagem) + '</p>';
+      document.getElementById('alertas-table').innerHTML = CABECALHO_TABELA +
+        '<tbody><tr><td colspan="3" style="text-align:center;color:var(--primary);padding:20px;font-size:13px">Não foi possível carregar os alertas</td></tr></tbody>';
+    }
+
+    // --- DONUT + LEGENDA ---
+    function renderCharts(resumo) {
+      document.getElementById('donut-total').textContent = resumo.total;
+
+      if (resumo.total === 0) {
+        renderDonutChart('donut-chart', [{ percentual: 100, cor: '#E5E7EB' }], 130);
+        document.getElementById('donut-legend').innerHTML =
+          '<p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Nenhum alerta ' + LABEL_PERIODO[periodoAtivo] + '</p>';
+        return;
+      }
+
+      renderDonutChart('donut-chart', resumo.origemAlertas.map(function (o) {
+        return { percentual: o.percentual, cor: o.cor };
+      }), 130);
+
+      var legendHTML = '';
+      for (var i = 0; i < resumo.origemAlertas.length; i++) {
+        var o = resumo.origemAlertas[i];
+        legendHTML += '<div class="alerta-legend-item">' +
+          '<span style="width:10px;height:10px;border-radius:50%;background:' + esc(o.cor) + ';display:inline-block;flex-shrink:0"></span>' +
+          '<div>' +
+            '<div class="alerta-legend-local">' + esc(o.local) + '</div>' +
+            '<div class="alerta-legend-pct">' + o.percentual.toFixed(1) + '%</div>' +
+          '</div>' +
+        '</div>';
+      }
+      document.getElementById('donut-legend').innerHTML = legendHTML;
+    }
+
     // --- TABELA ---
-    function renderTabela() {
-      var d = getDados();
+    function renderTabela(alertas) {
       var tabela = document.getElementById('alertas-table');
 
-      if (!conectado) {
-        tabela.innerHTML =
-          '<thead><tr><th>Descricao</th><th>Tempo</th><th>Local</th></tr></thead>' +
-          '<tbody><tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:20px;font-size:13px">Veículo não conectado</td></tr></tbody>';
+      if (alertas.length === 0) {
+        tabela.innerHTML = CABECALHO_TABELA +
+          '<tbody><tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:20px;font-size:13px">Nenhum alerta no período</td></tr></tbody>';
         return;
       }
 
       var linhas = '';
-      for (var i = 0; i < d.tabelaAlertas.length; i++) {
-        var a = d.tabelaAlertas[i];
-        var isLast = i === d.tabelaAlertas.length - 1;
+      for (var i = 0; i < alertas.length; i++) {
+        var a = alertas[i];
+        var isLast = i === alertas.length - 1;
         linhas += '<tr style="' + (isLast ? '' : 'border-bottom:1px solid var(--border)') + '">' +
           '<td><div style="display:flex;align-items:center;gap:7px">' +
-            '<span class="alert-dot ' + a.nivel + '"></span>' +
-            '<span style="font-size:13px">' + a.descricao + '</span>' +
+            '<span class="alert-dot ' + esc(a.nivel) + '"></span>' +
+            '<span style="font-size:13px">' + esc(a.titulo) + '</span>' +
           '</div></td>' +
-          '<td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">' + a.tempo + '</td>' +
-          '<td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">' + a.local + '</td>' +
+          '<td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">' + tempoRelativo(a.dataHora) + '</td>' +
+          '<td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">' + esc(a.origem) + '</td>' +
         '</tr>';
       }
 
-      tabela.innerHTML =
-        '<thead><tr><th>Descricao</th><th>Tempo</th><th>Local</th></tr></thead>' +
-        '<tbody>' + linhas + '</tbody>';
+      tabela.innerHTML = CABECALHO_TABELA + '<tbody>' + linhas + '</tbody>';
     }
 
-    renderCharts();
-    renderTabela();
-
     // --- MODAL EXPANDIR ---
-    document.getElementById('btn-expandir').addEventListener('click', function () {
-      if (!conectado) return;
-      var d = getDados();
-      var labels = { '24h': 'últimas 24 horas', '7d': 'últimos 7 dias', '30d': 'últimos 30 dias' };
-      document.getElementById('modal-alertas-subtitulo').textContent =
-        d.total + ' alertas nos ' + labels[periodoAtivo];
+    // GET /vehicles/{id}/alerts?period=...&pageSize=100 -> lista completa do periodo
+    document.getElementById('btn-expandir').addEventListener('click', async function () {
+      if (!veiculoId) return;
+      var periodo = periodoAtivo;
+      var subtitulo = document.getElementById('modal-alertas-subtitulo');
+      var lista = document.getElementById('modal-alertas-lista');
 
-      var listaHTML = '';
-      for (var i = 0; i < d.todosAlertas.length; i++) {
-        var a = d.todosAlertas[i];
-        var isLast = i === d.todosAlertas.length - 1;
-        listaHTML += '<div style="display:flex;align-items:flex-start;gap:10px;padding:11px 0;' +
-          (isLast ? '' : 'border-bottom:1px solid var(--border)') + '">' +
-          '<span class="alert-dot ' + a.nivel + '" style="margin-top:3px;flex-shrink:0"></span>' +
-          '<div style="flex:1">' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + a.descricao + '</div>' +
-            '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">' + a.tempo + ' · ' + a.local + '</div>' +
-          '</div>' +
-        '</div>';
-      }
-      document.getElementById('modal-alertas-lista').innerHTML = listaHTML;
+      subtitulo.textContent = '';
+      lista.innerHTML = msgCard('Carregando...');
       document.getElementById('modal-todos-alertas').classList.remove('hidden');
+
+      try {
+        var resp = await apiCall(base() + '/alerts?period=' + periodo + '&pageSize=100');
+        subtitulo.textContent = resp.total + ' alertas ' + LABEL_PERIODO[periodo];
+
+        if (resp.items.length === 0) {
+          lista.innerHTML = msgCard('Nenhum alerta no período');
+          return;
+        }
+
+        var listaHTML = '';
+        for (var i = 0; i < resp.items.length; i++) {
+          var a = resp.items[i];
+          var isLast = i === resp.items.length - 1;
+          listaHTML += '<div style="display:flex;align-items:flex-start;gap:10px;padding:11px 0;' +
+            (isLast ? '' : 'border-bottom:1px solid var(--border)') + '">' +
+            '<span class="alert-dot ' + esc(a.nivel) + '" style="margin-top:3px;flex-shrink:0"></span>' +
+            '<div style="flex:1">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text-primary)">' + esc(a.titulo) + '</div>' +
+              (a.descricao ? '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">' + esc(a.descricao) + '</div>' : '') +
+              '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">' + tempoRelativo(a.dataHora) + ' · ' + esc(a.origem) + '</div>' +
+            '</div>' +
+          '</div>';
+        }
+        lista.innerHTML = listaHTML;
+      } catch (e) {
+        lista.innerHTML = msgCard(e.message, 'var(--primary)');
+      }
     });
 
     document.getElementById('fechar-modal-alertas').addEventListener('click', function () {
@@ -204,6 +252,21 @@
         this.classList.add('hidden');
       }
     });
+
+    // --- INÍCIO ---
+    if (verificarAuth()) {
+      veiculoId = lerVeiculoId();
+
+      renderHeader({ back: ROTAS.home, greeting: 'Alertas' });
+      renderBottomNav('');
+
+      if (!veiculoId) {
+        mostrarErro('Nenhum veículo vinculado a esta conta.');
+      } else {
+        carregarVeiculo();
+        carregarResumo();
+      }
+    }
   </script>
 </body>
 </html>
