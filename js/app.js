@@ -15,10 +15,27 @@ const ROTAS = {
   perfil: '../perfil/perfil.html'
 };
 
-function verificarAuth() {
-  if (!sessionStorage.getItem('sf_logado')) {
-    window.location.href = ROTAS.login;
+// le o "exp" de dentro do JWT (so pra saber se ja venceu; quem valida de verdade e a API)
+function tokenExpirado(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64));
+    return !payload.exp || payload.exp * 1000 <= Date.now();
+  } catch (e) {
+    return true;
   }
+}
+
+// precisa de js/api.js carregado antes
+function verificarAuth() {
+  const token = lerToken();
+  if (!token || tokenExpirado(token)) {
+    limparSessao();
+    if (token) guardarMensagemLogin('Sessão expirada, faça login novamente');
+    window.location.href = ROTAS.login;
+    return false;
+  }
+  return true;
 }
 
 function fazerLogin() {
@@ -46,6 +63,76 @@ function desconectarVeiculo() {
   sessionStorage.setItem('sf_conectado', 'false');
   window.location.href = ROTAS.home;
 }
+
+// --- helpers pros dados da API ---
+
+// a API manda data em UTC sem fuso (ex: 2026-10-05T14:30:00), entao forca o Z
+function dataDaApi(texto) {
+  if (!texto) return null;
+  return new Date(/(Z|[+-]\d{2}:\d{2})$/i.test(texto) ? texto : texto + 'Z');
+}
+
+function tempoRelativo(texto) {
+  const data = dataDaApi(texto);
+  if (!data) return '—';
+  const min = Math.max(0, Math.round((Date.now() - data.getTime()) / 60000));
+  if (min < 1) return 'agora';
+  if (min < 60) return min + ' min atrás';
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return horas + 'h atrás';
+  const dias = Math.floor(horas / 24);
+  return dias === 1 ? '1 dia atrás' : dias + ' dias atrás';
+}
+
+function formatarDataHora(texto) {
+  const data = dataDaApi(texto);
+  if (!data) return '—';
+  return data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' +
+    data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// texto que vem da API vai pro innerHTML, entao escapa antes
+function esc(valor) {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// card padrao de carregando / erro / vazio
+function msgCard(texto, cor) {
+  return '<p style="font-size:13px;color:' + (cor || 'var(--text-secondary)') + ';text-align:center;padding:16px 0;margin:0">' + esc(texto) + '</p>';
+}
+
+// badge do sino = alertas "high" das ultimas 24h
+async function atualizarBadgeAlertas(veiculoId) {
+  try {
+    const lista = await apiCall('/vehicles/' + veiculoId + '/alerts?period=24h&pageSize=100');
+    const qtd = lista.items.filter(function (a) { return a.nivel === 'high'; }).length;
+    const sino = document.querySelector('#main-header .header-bell');
+    if (!sino) return;
+    const antigo = sino.querySelector('.header-badge');
+    if (antigo) antigo.remove();
+    if (qtd > 0) {
+      sino.insertAdjacentHTML('beforeend', `<span class="header-badge" aria-label="${qtd} alertas críticos">${qtd}</span>`);
+    }
+  } catch (e) {
+    // badge nao e essencial, se falhar a tela continua
+  }
+}
+
+// login mostra a mensagem que o apiCall/verificarAuth guardou antes de redirecionar (ex: sessao expirada)
+document.addEventListener('DOMContentLoaded', function () {
+  const msgErro = document.getElementById('msg-erro');
+  if (!msgErro) return;
+  // le direto do sessionStorage (mesma chave do api.js) pra funcionar mesmo em tela que nao carrega o api.js
+  const mensagem = sessionStorage.getItem('sf_msg_login');
+  sessionStorage.removeItem('sf_msg_login');
+  if (mensagem) {
+    msgErro.textContent = mensagem;
+    msgErro.classList.remove('hidden');
+  }
+});
 
 // icones svg
 
@@ -133,7 +220,11 @@ function renderHeader(config) {
   const el = document.getElementById('main-header');
   if (!el) return;
 
-  const contAlertas = DADOS.alertas.filter(a => a.nivel === 'high').length;
+  // telas ja integradas nao carregam dados.js; o badge delas vem do atualizarBadgeAlertas
+  const temMock = typeof DADOS !== 'undefined';
+  const contAlertas = temMock ? DADOS.alertas.filter(a => a.nivel === 'high').length : 0;
+  const foto = temMock ? DADOS.usuario.foto : '../img/foto-perfil.png';
+  const nome = temMock ? DADOS.usuario.nome : 'usuário';
 
   const btnEsq = config.back
     ? `<a href="${typeof config.back === 'string' ? config.back : ROTAS.home}" class="header-back" aria-label="Voltar">${icoBack()}</a>`
@@ -148,13 +239,13 @@ function renderHeader(config) {
       <div class="header-actions">
         <a href="${ROTAS.alertas}" class="header-bell" aria-label="Ver alertas">${icoBell()}${badge}</a>
         <a href="${ROTAS.perfil}" class="header-avatar" aria-label="Ver perfil">
-          <img src="${DADOS.usuario.foto}" alt="Foto de perfil de ${DADOS.usuario.nome}"
+          <img src="${foto}" alt="Foto de perfil de ${nome}"
                onerror="this.style.display='none';this.parentElement.innerHTML='<svg width=36 height=36 viewBox=\\'0 0 36 36\\' fill=\\'none\\'><circle cx=\\'18\\' cy=\\'18\\' r=\\'18\\' fill=\\'rgba(255,255,255,0.25)\\'/><circle cx=\\'18\\' cy=\\'14\\' r=\\'6\\' fill=\\'white\\' opacity=\\'0.85\\'/><path d=\\'M5 34c0-7.18 5.82-13 13-13s13 5.82 13 13\\' stroke=\\'white\\' stroke-width=\\'1.5\\' stroke-linecap=\\'round\\' fill=\\'none\\' opacity=\\'0.85\\'/></svg>'">
         </a>
       </div>
     </div>
     <div class="header-greeting">${config.greeting}</div>
-    ${config.vehicle ? `<div class="header-vehicle">${config.vehicle}</div>` : ''}
+    ${config.vehicle ? `<div class="header-vehicle">${esc(config.vehicle)}</div>` : ''}
   `;
 }
 
