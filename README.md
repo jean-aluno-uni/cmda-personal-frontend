@@ -10,22 +10,29 @@ Projeto desenvolvido pelo grupo CMDA no curso de Engenharia de Software.
 
 ## Como executar
 
-1. Faça o download ou clone o repositório
-2. Abra a pasta `web/` com qualquer servidor HTTP local. Exemplos:
-   - **VS Code:** instale a extensão *Live Server* → clique em "Go Live"
-   - **Python:** `python -m http.server 5500` dentro da pasta `web/`
-   - **Node.js:** `npx serve web`
-3. Acesse `http://localhost:5500` no navegador
-4. Na tela de login, use as credenciais abaixo e clique em **Entrar**
+O front consome a API do repositório **cmda-personal-backend**, então os dois precisam estar rodando.
 
-### Credenciais de acesso
+1. Suba a API (detalhes no README do backend):
+   ```bash
+   cd cmda-personal-backend
+   python -m app.seed.seed_data      # cria o usuário de demonstração
+   uvicorn app.main:app --reload     # http://127.0.0.1:8000
+   ```
+2. Confira o endereço da API em `js/config.js` (`CONFIG.API_URL`, padrão `http://127.0.0.1:8000/api/v1`).
+3. Sirva esta pasta com qualquer servidor HTTP local:
+   - **VS Code:** extensão *Live Server* → "Go Live"
+   - **Python:** `python -m http.server 5500`
+   - **Node.js:** `npx serve .`
+4. Acesse `http://localhost:5500` e entre com o usuário de demonstração.
+
+### Credenciais de acesso (seed do backend)
 
 | Campo | Valor |
 |-------|-------|
-| Usuário | `Amanda Pereira` (já preenchido) |
-| Senha | qualquer valor, ex: `123456` |
+| E-mail | `demo@cmda.app` |
+| Senha | `Demo@1234` |
 
-> A autenticação é simulada — qualquer senha não-vazia é aceita.
+Existe também `outro@cmda.app` / `Outro@1234`, com outro veículo, para testar que um usuário não vê o veículo do outro (a API responde 403).
 
 > Não abra os arquivos `.html` diretamente pelo sistema de arquivos (protocolo `file://`), pois alguns navegadores bloqueiam scripts nesse modo.
 
@@ -33,53 +40,55 @@ Projeto desenvolvido pelo grupo CMDA no curso de Engenharia de Software.
 
 | Tela | Descrição |
 |------|-----------|
-| Login | Autenticação com usuário e senha |
+| Login | Autenticação com e-mail e senha |
 | Recuperar senha | Fluxo completo: e-mail → OTP → nova senha |
 | Home | Dashboard com velocidade, RPM, temperaturas e alertas |
-| Condições do motor | Temperaturas detalhadas + gráfico histórico de 6 dias |
+| Condições do motor | Temperaturas detalhadas + gráfico histórico |
 | RPM | Gauge 270° com status e diagnóstico |
-| Diagnóstico | Tabela completa com 6 indicadores e mini-anéis de progresso |
+| Diagnóstico | Status geral, anéis com a leitura atual e tabela do último diagnóstico |
 | Alertas | Donut chart de origem com filtro por período (24h / 7 dias / 30 dias), tabela de alertas e modal com lista completa |
 | Perfil | Dados do usuário, veículo conectado, sair e desconectar |
 
+## Integração com a API
+
+O front deixou de usar só dados fixos e passou a buscar os dados na API do backend por HTTP, enviando o token JWT em cada requisição.
+
+- **`js/config.js`** — URL base da API.
+- **`js/api.js`** — função `apiCall(caminho, { method, body })`, usada por todas as telas. Ela coloca o token no cabeçalho `Authorization: Bearer ...`, envia/recebe JSON, devolve a mensagem de erro da API (`{"error": "..."}`) e, quando a API responde **401** (sessão expirada ou encerrada), limpa a sessão e volta para o login mostrando o motivo. No mesmo arquivo ficam as funções de guardar e ler o token e o id do veículo no `sessionStorage` (`sf_token` e `sf_veiculo_id`).
+- **`js/app.js`** — `verificarAuth()` agora confere se existe um token real e se ele não venceu; além dos utilitários de tela (header, gráficos SVG, formatação de datas da API, `esc()` para texto vindo da API).
+
+Fluxo: login (`POST /auth/login`) → guarda o token → `GET /vehicles` → guarda o id do veículo → cada tela chama as rotas `/vehicles/{id}/...`.
+
+### Status por tela
+
+| Tela | Rotas usadas | Integrada |
+|------|--------------|-----------|
+| Alertas | `GET /vehicles/{id}`, `GET /vehicles/{id}/alerts/summary`, `GET /vehicles/{id}/alerts` | Sim |
+| Diagnóstico | `GET /vehicles/{id}`, `GET /vehicles/{id}/diagnostics`, `GET /vehicles/{id}/telemetry/latest` | Sim |
+| Login / recuperar senha | `POST /auth/login`, `GET /vehicles`, `POST /auth/password/...` | Em andamento |
+| Perfil | `GET /users/me`, `GET /vehicles/{id}`, `POST /vehicles/{id}/disconnect`, `POST /auth/logout` | Em andamento |
+| Home, Condições do motor, RPM | `GET /vehicles/{id}/telemetry/latest`, `/status`, `/alerts/summary`, `/temperature/history`, `POST /connect` | Em andamento |
+
+As telas ainda não integradas continuam lendo `js/dados.js` (mock). Quando todas estiverem integradas, esse arquivo será removido.
+
 ## Estado de conexão
 
-A plataforma simula dois estados:
-
-- **Conectado:** exibe todos os dados de telemetria do mock
-- **Desconectado:** exibe traços (—) e mensagem de veículo não conectado
-
-O app inicia **desconectado por padrão**. Para conectar, acesse a tela **Home** e clique em **"Conectar ao veículo"**. Para desconectar, vá em **Perfil → Desconectar veículo**.
-
-O estado é controlado pela chave `sf_conectado` no `sessionStorage` e é resetado a cada novo login.
-
-## Dados mockados
-
-Todos os dados estão no arquivo `js/dados.js`. Os principais valores mock são:
-
-```
-Veículo:   Hyundai HB20 · Placa GSBH
-Usuário:   Amanda Pereira
-Velocidade: 120 km/h
-RPM:        2100 (máx 3000)
-Temp. óleo: 90 °C  ⚠ elevada
-Temp. líquido: 30 °C
-Temp. ar:   30 °C
-Temp. geral: 80 °C
-```
+O estado de conexão vem do backend (campo `conectado` do veículo). Com o veículo desconectado, a rota de telemetria responde `disponivel: false` e as telas mostram traços (—) / "Veículo não conectado" em vez de números. Alertas e diagnóstico são histórico gravado no banco, então continuam aparecendo.
 
 ## Tecnologias utilizadas
 
 - **HTML5** — estrutura semântica, múltiplas páginas
 - **CSS3** — variáveis, Flexbox, Grid, media queries, animações
-- **JavaScript** — manipulação de DOM, eventos, sessionStorage, SVG dinâmico
+- **JavaScript** — DOM, eventos, `fetch` (via `apiCall`), `async/await`, sessionStorage, SVG dinâmico
 - **SVG** — gráficos gerados por código: donut chart, gauge RPM, linha de temperatura, mini-anéis
+- **API REST (FastAPI)** — backend em Python, JSON em camelCase, autenticação JWT
 
 ## Estrutura de arquivos
 
 ```
 
 ├── index.html                  # Entrada da aplicação (redireciona para login/)
+├── CLAUDE.md                   # Regras do grupo para mexer no código
 ├── css/
 │   └── style.css               # Design system completo
 ├── img/
@@ -87,8 +96,10 @@ Temp. geral: 80 °C
 │   ├── carro-desativado.png
 │   └── foto-perfil.png
 ├── js/
-│   ├── dados.js                # Dados mockados
-│   └── app.js                  # Utilitários compartilhados e gráficos SVG
+│   ├── config.js               # URL da API
+│   ├── api.js                  # apiCall + token e veículo no sessionStorage
+│   ├── app.js                  # verificarAuth, utilitários compartilhados e gráficos SVG
+│   └── dados.js                # Dados mockados (só nas telas ainda não integradas)
 ├── login/
 │   ├── index.html              # Login
 │   ├── recuperar-senha.html    # Recuperação de senha
@@ -99,9 +110,9 @@ Temp. geral: 80 °C
 │   ├── condicoes-motor.html    # Detalhes do motor
 │   └── rpm.html                # Detalhes de RPM
 ├── diagnostico/
-│   └── diagnostico.html        # Aba diagnóstico
+│   └── diagnostico.html        # Aba diagnóstico (integrada)
 ├── alertas/
-│   └── alertas.html            # Aba alertas
+│   └── alertas.html            # Aba alertas (integrada, modelo para as outras)
 └── perfil/
     └── perfil.html             # Aba perfil
 ```
