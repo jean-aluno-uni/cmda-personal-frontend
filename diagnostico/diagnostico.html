@@ -37,23 +37,61 @@
     </div>
   </div>
 
-  <script src="../js/dados.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
   <script src="../js/app.js"></script>
   <script>
-    verificarAuth();
+    // mesmo modelo de alertas.html
+    // GET /vehicles/{id}                   -> nome do veiculo no header
+    // GET /vehicles/{id}/diagnostics       -> status geral + tabela (ultimo diagnostico gravado)
+    // GET /vehicles/{id}/telemetry/latest  -> aneis com a leitura atual (so vem com o veiculo conectado)
 
-    var conectado = estaConectado();
+    var veiculoId = null;
 
-    renderHeader({
-      greeting: 'Diagnóstico',
-      vehicle: DADOS.veiculo.modelo
-    });
-    renderBottomNav('diagnostico');
+    function base() {
+      return '/vehicles/' + veiculoId;
+    }
 
-    // --- STATUS GERAL ---
-    var statusCard = document.getElementById('status-geral-card');
-    if (conectado) {
-      var temAlerta = DADOS.diagnostico.some(function (d) { return d.alerta; });
+    async function carregarVeiculo() {
+      try {
+        var veiculo = await apiCall(base());
+        renderHeader({ greeting: 'Diagnóstico', vehicle: veiculo.modelo });
+        atualizarBadgeAlertas(veiculoId);
+      } catch (e) {
+        // header sem o nome do veiculo nao impede o resto da tela
+      }
+    }
+
+    // --- STATUS GERAL + TABELA ---
+    async function carregarDiagnostico() {
+      var statusCard = document.getElementById('status-geral-card');
+      var diagTable = document.getElementById('diag-table');
+      var cabecalho = `
+        <thead>
+          <tr>
+            <th>Indicador</th>
+            <th>Valor</th>
+            <th>Referência</th>
+            <th>Status</th>
+          </tr>
+        </thead>`;
+
+      statusCard.innerHTML = msgCard('Carregando...');
+      diagTable.innerHTML = cabecalho + '<tbody><tr><td colspan="4">' + msgCard('Carregando...') + '</td></tr></tbody>';
+
+      var diag;
+      try {
+        diag = await apiCall(base() + '/diagnostics');
+      } catch (e) {
+        // 404 aqui = veiculo ainda sem diagnostico registrado
+        var cor = e.status === 404 ? null : 'var(--primary)';
+        statusCard.innerHTML = msgCard(e.message, cor);
+        diagTable.innerHTML = cabecalho + '<tbody><tr><td colspan="4">' + msgCard('Sem dados de diagnóstico', cor) + '</td></tr></tbody>';
+        return;
+      }
+
+      // statusGeral = true quando algum item esta em alerta
+      var temAlerta = diag.statusGeral;
       statusCard.innerHTML = `
         <div class="status-row">
           <div>
@@ -61,64 +99,92 @@
             <p style="font-size:13px;color:var(--text-secondary);margin:0">
               ${temAlerta ? 'Há indicadores fora da faixa normal. Verifique os detalhes abaixo.' : 'Todos os indicadores dentro dos parâmetros normais.'}
             </p>
+            <p style="font-size:11px;color:var(--text-secondary);margin:4px 0 0">Realizado em ${formatarDataHora(diag.dataHora)}</p>
           </div>
           <span class="status-badge ${temAlerta ? 'status-medium' : 'status-ok'}">${temAlerta ? 'Atenção' : 'Normal'}</span>
         </div>`;
-    } else {
-      statusCard.innerHTML = `<p class="metric-disconnected" style="font-size:13px;color:var(--text-secondary)">Veículo não conectado</p>`;
+
+      var linhas = diag.itens.map(function (d, i) {
+        var isLast = i === diag.itens.length - 1;
+        return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
+          <td>${esc(d.indicador)}</td>
+          <td class="${d.alerta ? 'td-warn' : ''}">${esc(d.valor)}</td>
+          <td style="font-size:11px;color:var(--text-secondary)">${esc(d.referencia) || '—'}</td>
+          <td style="font-size:12px;color:${d.alerta ? 'var(--primary)' : 'var(--text-secondary)'}">${esc(d.observacao) || '—'}</td>
+        </tr>`;
+      }).join('');
+
+      diagTable.innerHTML = cabecalho + '<tbody>' + linhas + '</tbody>';
     }
 
     // --- MINI INDICADORES (anéis) ---
-    var grid = document.getElementById('indicadores-grid');
-    if (conectado) {
-      var t = DADOS.telemetria;
+    function pct(valor, max) {
+      return Math.min(100, Math.round((valor / max) * 100));
+    }
+
+    async function carregarIndicadores() {
+      var grid = document.getElementById('indicadores-grid');
+      var cardMsg = function (texto, cor) {
+        return '<div class="card" style="grid-column:1/-1;margin-bottom:0">' + msgCard(texto, cor) + '</div>';
+      };
+
+      grid.innerHTML = cardMsg('Carregando...');
+
+      var t;
+      try {
+        t = await apiCall(base() + '/telemetry/latest');
+      } catch (e) {
+        grid.innerHTML = cardMsg(e.message, 'var(--primary)');
+        return;
+      }
+
+      // disponivel=false: veiculo desconectado ou sem leituras ainda
+      if (!t.disponivel) {
+        grid.innerHTML = cardMsg(t.motivo === 'sem_leituras' ? 'Nenhuma leitura recebida do veículo' : 'Veículo não conectado');
+        return;
+      }
+
       var miniItems = [
-        { id: 'ring-rpm',  label: 'RPM',        valor: t.rpm.toLocaleString('pt-BR'),  ref: '750–3.000',  pct: Math.min(100, Math.round((t.rpm / t.rpmMax) * 100)),          cor: '#C2182B' },
-        { id: 'ring-vel',  label: 'Velocidade',  valor: t.velocidade + ' km/h',         ref: '0–200 km/h', pct: Math.min(100, Math.round((t.velocidade / 200) * 100)),        cor: '#3B82F6' },
-        { id: 'ring-oleo', label: 'Temp. Óleo',  valor: t.tempOleo + ' °C',             ref: 'até 85 °C',  pct: Math.min(100, Math.round((t.tempOleo / 85) * 100)),           cor: t.tempOleo > 85 ? '#C2182B' : '#10B981' },
-        { id: 'ring-liq',  label: 'Temp. Líq.',  valor: t.tempLiquido + ' °C',          ref: 'até 90 °C',  pct: Math.min(100, Math.round((t.tempLiquido / 90) * 100)),        cor: t.tempLiquido > 90 ? '#C2182B' : '#10B981' }
+        { id: 'ring-rpm',  label: 'RPM',        v: t.rpm,          max: 3000, ref: '750–3.000',  fmt: function (v) { return v.toLocaleString('pt-BR'); } },
+        { id: 'ring-vel',  label: 'Velocidade', v: t.velocidadeKmh, max: 200,  ref: '0–200 km/h', fmt: function (v) { return Math.round(v) + ' km/h'; } },
+        { id: 'ring-oleo', label: 'Temp. Óleo', v: t.tempOleo,     max: 85,   ref: 'até 85 °C',  fmt: function (v) { return Math.round(v) + ' °C'; }, limite: true },
+        { id: 'ring-liq',  label: 'Temp. Líq.', v: t.tempLiquido,  max: 90,   ref: 'até 90 °C',  fmt: function (v) { return Math.round(v) + ' °C'; }, limite: true }
       ];
 
       grid.innerHTML = miniItems.map(function (item) {
         return `<div class="card" style="margin-bottom:0;align-items:center;text-align:center">
           <div id="${item.id}"></div>
           <div class="ring-label" style="margin-top:6px">${item.label}</div>
-          <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-top:2px">${item.valor}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-top:2px">${item.v === null ? '—' : item.fmt(item.v)}</div>
           <div style="font-size:10px;color:var(--text-secondary)">ref: ${item.ref}</div>
         </div>`;
       }).join('');
 
       miniItems.forEach(function (item) {
-        renderMiniRing(item.id, item.pct, item.cor);
+        if (item.v === null) {
+          renderMiniRing(item.id, 0, '#E5E7EB');
+          return;
+        }
+        var cor = item.limite ? (item.v > item.max ? '#C2182B' : '#10B981') : (item.id === 'ring-rpm' ? '#C2182B' : '#3B82F6');
+        renderMiniRing(item.id, pct(item.v, item.max), cor);
       });
-    } else {
-      grid.innerHTML = `<div class="card" style="grid-column:1/-1;margin-bottom:0">
-        <p style="font-size:13px;color:var(--text-secondary);text-align:center">Veículo não conectado</p>
-      </div>`;
     }
 
-    // --- TABELA DIAGNÓSTICO ---
-    var diagTable = document.getElementById('diag-table');
-    var linhas = DADOS.diagnostico.map(function (d, i) {
-      var isLast = i === DADOS.diagnostico.length - 1;
-      return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
-        <td>${d.indicador}</td>
-        <td class="${d.alerta ? 'td-warn' : ''}">${conectado ? d.valor : '—'}</td>
-        <td style="font-size:11px;color:var(--text-secondary)">${d.referencia}</td>
-        <td style="font-size:12px;color:${d.alerta ? 'var(--primary)' : 'var(--text-secondary)'}">${conectado ? d.observacao : '—'}</td>
-      </tr>`;
-    }).join('');
+    // --- INÍCIO ---
+    if (verificarAuth()) {
+      veiculoId = lerVeiculoId();
 
-    diagTable.innerHTML = `
-      <thead>
-        <tr>
-          <th>Indicador</th>
-          <th>Valor</th>
-          <th>Referência</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>${linhas}</tbody>`;
+      renderHeader({ greeting: 'Diagnóstico' });
+      renderBottomNav('diagnostico');
+
+      if (!veiculoId) {
+        document.getElementById('status-geral-card').innerHTML = msgCard('Nenhum veículo vinculado a esta conta.');
+      } else {
+        carregarVeiculo();
+        carregarDiagnostico();
+        carregarIndicadores();
+      }
+    }
   </script>
 </body>
 </html>
