@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CMDA SmartFleet — Nova Senha</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -80,29 +81,32 @@
     </div>
   </div>
 
-  <script src="../js/dados.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
   <script src="../js/app.js"></script>
   <script>
+    // Sem resetToken da etapa do código, volta ao início da recuperação
+    var resetToken = sessionStorage.getItem('sf_reset_token');
+    if (!resetToken) {
+      window.location.replace(ROTAS.recuperarSenha);
+    }
+
     // Renderiza ícone de sucesso via SVG
     document.getElementById('success-icon-wrap').innerHTML = icoSuccess();
 
+    // Mesmas regras validadas pela API (guia visual; quem decide é o backend)
     var regras = [
-      { id: 'len',     label: 'Mínimo 8 caracteres',         fn: function (v) { return v.length >= 8; } },
-      { id: 'lower',   label: '1 letra minúscula',            fn: function (v) { return /[a-z]/.test(v); } },
-      { id: 'upper',   label: '1 letra maiúscula',            fn: function (v) { return /[A-Z]/.test(v); } },
-      { id: 'number',  label: '1 número',                     fn: function (v) { return /[0-9]/.test(v); } },
-      { id: 'special', label: '1 caractere especial (!@#$%)', fn: function (v) { return /[!@#$%^&*(),.?":{}|<>]/.test(v); } }
+      { label: 'Mínimo 8 caracteres',         fn: function (v) { return v.length >= 8; } },
+      { label: '1 letra minúscula',            fn: function (v) { return /[a-z]/.test(v); } },
+      { label: '1 letra maiúscula',            fn: function (v) { return /[A-Z]/.test(v); } },
+      { label: '1 número',                     fn: function (v) { return /[0-9]/.test(v); } },
+      { label: '1 caractere especial (!@#$%)', fn: function (v) { return /[!@#$%^&*(),.?":{}|<>]/.test(v); } }
     ];
 
-    // Renderiza lista de regras
     function renderRegras(senha) {
-      var lista = document.getElementById('lista-regras');
-      lista.innerHTML = regras.map(function (r) {
+      document.getElementById('lista-regras').innerHTML = regras.map(function (r) {
         var estado = senha.length === 0 ? 'idle' : (r.fn(senha) ? 'ok' : 'fail');
-        return `<div class="pw-rule">
-          <span class="pw-dot ${estado}"></span>
-          <span>${r.label}</span>
-        </div>`;
+        return '<div class="pw-rule"><span class="pw-dot ' + estado + '"></span><span>' + r.label + '</span></div>';
       }).join('');
     }
 
@@ -124,36 +128,51 @@
     });
 
     // Redefinir senha
-    document.getElementById('btn-redefinir').addEventListener('click', function () {
+    var btnRedefinir = document.getElementById('btn-redefinir');
+    var msgErro      = document.getElementById('msg-erro');
+
+    function mostrarErro(texto) {
+      msgErro.textContent = texto;
+      msgErro.classList.remove('hidden');
+    }
+
+    btnRedefinir.addEventListener('click', async function () {
       var nova     = document.getElementById('nova-senha').value;
       var confirma = document.getElementById('confirma-senha').value;
-      var msgErro  = document.getElementById('msg-erro');
 
       if (!nova || !confirma) {
-        msgErro.textContent = 'Preencha todos os campos.';
-        msgErro.classList.remove('hidden');
-        return;
-      }
-
-      var todasOk = regras.every(function (r) { return r.fn(nova); });
-      if (!todasOk) {
-        msgErro.textContent = 'A senha não atende aos requisitos de segurança.';
-        msgErro.classList.remove('hidden');
+        mostrarErro('Preencha todos os campos.');
         return;
       }
 
       if (nova !== confirma) {
-        msgErro.textContent = 'As senhas não coincidem.';
-        msgErro.classList.remove('hidden');
+        mostrarErro('As senhas não coincidem.');
         return;
       }
 
       msgErro.classList.add('hidden');
-      document.getElementById('modal-sucesso').classList.remove('hidden');
+      btnRedefinir.disabled = true;
+      btnRedefinir.textContent = 'Redefinindo...';
+
+      try {
+        await apiCall('/auth/password/reset', {
+          method: 'POST',
+          body: { resetToken: resetToken, novaSenha: nova }
+        });
+        document.getElementById('modal-sucesso').classList.remove('hidden');
+      } catch (err) {
+        // Senha fraca (422) e token expirado (401) chegam com a mensagem da API
+        mostrarErro(err.message || 'Não foi possível redefinir a senha.');
+        btnRedefinir.disabled = false;
+        btnRedefinir.textContent = 'Redefinir senha';
+      }
     });
 
     document.getElementById('btn-ok-sucesso').addEventListener('click', function () {
+      // Troca de senha encerra a sessão para exigir login com a nova senha
       sessionStorage.removeItem('sf_email_otp');
+      sessionStorage.removeItem('sf_reset_token');
+      limparSessao();
       window.location.href = ROTAS.login;
     });
   </script>

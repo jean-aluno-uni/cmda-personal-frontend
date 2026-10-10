@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CMDA SmartFleet — Perfil</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -95,80 +96,128 @@
     </div>
   </div>
 
-  <script src="../js/dados.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
   <script src="../js/app.js"></script>
   <script>
     verificarAuth();
 
-    var conectado = estaConectado();
+    var veiculoId = lerVeiculoId();
+    var veiculo   = null;
 
-    renderHeader({
-      greeting: 'Perfil',
-      vehicle: DADOS.veiculo.modelo
-    });
+    renderHeader({ greeting: 'Perfil' });
     renderBottomNav('perfil');
 
+    var veiculoCard = document.getElementById('veiculo-card');
+    var btnDesc     = document.getElementById('btn-desconectar');
+    var modalDesc   = document.getElementById('modal-desconectar');
+    var btnConfirmarDesc = document.getElementById('btn-confirmar-desc');
+
     // --- DADOS DO USUÁRIO ---
-    document.getElementById('profile-name').textContent  = DADOS.usuario.nome;
-    document.getElementById('profile-email').textContent = DADOS.usuario.email;
-    document.getElementById('field-nome').value          = DADOS.usuario.nome;
-    document.getElementById('field-email').value         = DADOS.usuario.email;
+    document.getElementById('profile-name').textContent = 'Carregando...';
+
+    async function carregarUsuario() {
+      try {
+        var usuario = await apiCall('/users/me');
+        document.getElementById('profile-name').textContent  = usuario.nome;
+        document.getElementById('profile-email').textContent = usuario.email;
+        document.getElementById('field-nome').value          = usuario.nome;
+        document.getElementById('field-email').value         = usuario.email;
+      } catch (err) {
+        document.getElementById('profile-name').textContent  = 'Não foi possível carregar o perfil';
+        document.getElementById('profile-email').textContent = err.message || '';
+      }
+    }
 
     // --- VEÍCULO ---
-    var veiculoCard = document.getElementById('veiculo-card');
-    if (conectado) {
-      var v = DADOS.veiculo;
+    function mensagemVeiculo(texto) {
+      veiculoCard.innerHTML = '<p style="font-size:13px;color:var(--text-secondary)">' + esc(texto) + '</p>';
+    }
+
+    function renderVeiculo() {
       veiculoCard.innerHTML = `
         <div class="veiculo-row">
           <div>
-            <div class="card-title">${v.modelo}</div>
-            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${v.placa}</div>
+            <div class="card-title">${esc(veiculo.modelo)}</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${esc(veiculo.placa)}</div>
           </div>
-          <span class="status-badge status-ok">Conectado</span>
+          <span class="status-badge ${veiculo.conectado ? 'status-ok' : 'status-high'}">${veiculo.conectado ? 'Conectado' : 'Desconectado'}</span>
         </div>`;
-    } else {
-      veiculoCard.innerHTML = `
-        <div class="veiculo-row">
-          <div>
-            <div class="card-title">${DADOS.veiculo.modelo}</div>
-            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">Placa: ${DADOS.veiculo.placa}</div>
-          </div>
-          <span class="status-badge status-high">Desconectado</span>
-        </div>`;
+
+      renderHeader({ greeting: 'Perfil', vehicle: esc(veiculo.modelo) });
+      btnDesc.textContent = veiculo.conectado ? 'Desconectar veículo' : 'Conectar veículo';
+      btnDesc.disabled = false;
     }
 
-    // --- DESCONECTAR ---
-    var btnDesc = document.getElementById('btn-desconectar');
-
-    if (!conectado) {
-      btnDesc.textContent = 'Conectar veículo';
-    }
-
-    btnDesc.addEventListener('click', function () {
-      if (!conectado) {
-        conectarVeiculo();
+    async function carregarVeiculo() {
+      btnDesc.disabled = true;
+      if (!veiculoId) {
+        mensagemVeiculo('Nenhum veículo vinculado à sua conta.');
         return;
       }
-      document.getElementById('modal-veiculo-nome').textContent = DADOS.veiculo.modelo;
-      document.getElementById('modal-desconectar').classList.remove('hidden');
+      mensagemVeiculo('Carregando...');
+      try {
+        veiculo = await apiCall('/vehicles/' + veiculoId);
+        renderVeiculo();
+      } catch (err) {
+        mensagemVeiculo(err.message || 'Não foi possível carregar o veículo.');
+      }
+    }
+
+    carregarUsuario();
+    carregarVeiculo();
+
+    // --- CONECTAR / DESCONECTAR ---
+    function fecharModalDesc() {
+      modalDesc.classList.add('hidden');
+    }
+
+    async function alterarConexao(acao) {
+      try {
+        var resposta = await apiCall('/vehicles/' + veiculoId + '/' + acao, { method: 'POST' });
+        veiculo.conectado = resposta.conectado;
+        renderVeiculo();
+      } catch (err) {
+        mensagemVeiculo(err.message || 'Não foi possível alterar a conexão do veículo.');
+      }
+    }
+
+    btnDesc.addEventListener('click', async function () {
+      if (!veiculo) return;
+      if (!veiculo.conectado) {
+        btnDesc.disabled = true;
+        btnDesc.textContent = 'Conectando...';
+        await alterarConexao('connect');
+        return;
+      }
+      document.getElementById('modal-veiculo-nome').textContent = veiculo.modelo || '';
+      modalDesc.classList.remove('hidden');
     });
 
-    document.getElementById('fechar-modal-desc').addEventListener('click', function () {
-      document.getElementById('modal-desconectar').classList.add('hidden');
-    });
+    document.getElementById('fechar-modal-desc').addEventListener('click', fecharModalDesc);
+    document.getElementById('btn-cancelar-desc').addEventListener('click', fecharModalDesc);
 
-    document.getElementById('btn-cancelar-desc').addEventListener('click', function () {
-      document.getElementById('modal-desconectar').classList.add('hidden');
-    });
-
-    document.getElementById('btn-confirmar-desc').addEventListener('click', function () {
-      document.getElementById('modal-desconectar').classList.add('hidden');
-      desconectarVeiculo();
+    btnConfirmarDesc.addEventListener('click', async function () {
+      btnConfirmarDesc.disabled = true;
+      btnConfirmarDesc.textContent = 'Desconectando...';
+      await alterarConexao('disconnect');
+      fecharModalDesc();
+      btnConfirmarDesc.disabled = false;
+      btnConfirmarDesc.textContent = 'Desconectar';
     });
 
     // --- SAIR ---
-    document.getElementById('btn-sair').addEventListener('click', function () {
-      fazerLogout();
+    var btnSair = document.getElementById('btn-sair');
+    btnSair.addEventListener('click', async function () {
+      btnSair.disabled = true;
+      btnSair.textContent = 'Saindo...';
+      try {
+        await apiCall('/auth/logout', { method: 'POST' });
+      } catch (err) {
+        // a sessão local é limpa mesmo se o servidor falhar
+      }
+      limparSessao();
+      window.location.href = ROTAS.login;
     });
   </script>
 </body>

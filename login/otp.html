@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CMDA SmartFleet — Código de Verificação</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -61,12 +62,23 @@
     </div>
   </div>
 
-  <script src="../js/dados.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
   <script src="../js/app.js"></script>
   <script>
-    // Exibe e-mail no topo
-    var email = sessionStorage.getItem('sf_email_otp') || DADOS.usuario.email;
-    document.getElementById('email-exibido').textContent = email;
+    // Sem e-mail da etapa anterior, volta ao início da recuperação
+    var email = sessionStorage.getItem('sf_email_otp');
+    if (!email) {
+      window.location.replace(ROTAS.recuperarSenha);
+    }
+    document.getElementById('email-exibido').textContent = email || '';
+
+    var msgErro = document.getElementById('msg-erro');
+
+    function mostrarErro(texto) {
+      msgErro.textContent = texto;
+      msgErro.classList.remove('hidden');
+    }
 
     var inputs = document.querySelectorAll('.otp-box');
 
@@ -91,28 +103,55 @@
     // Foco automático no primeiro campo
     inputs[0].focus();
 
-    // Reenviar (simulado)
-    document.getElementById('btn-reenviar').addEventListener('click', function () {
-      this.textContent = 'Código reenviado!';
-      var self = this;
+    // Reenviar
+    var btnReenviar = document.getElementById('btn-reenviar');
+    var htmlReenviar = btnReenviar.innerHTML;
+
+    btnReenviar.addEventListener('click', async function () {
+      btnReenviar.disabled = true;
+      msgErro.classList.add('hidden');
+      try {
+        await apiCall('/auth/password/otp/resend', { method: 'POST', body: { email: email } });
+        btnReenviar.textContent = 'Código reenviado!';
+      } catch (err) {
+        mostrarErro(err.message || 'Não foi possível reenviar o código.');
+      }
       setTimeout(function () {
-        self.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg> Reenviar código';
+        btnReenviar.innerHTML = htmlReenviar;
+        btnReenviar.disabled = false;
       }, 2500);
     });
 
     // Verificar
-    document.getElementById('btn-verificar').addEventListener('click', function () {
+    var btnVerificar = document.getElementById('btn-verificar');
+
+    btnVerificar.addEventListener('click', async function () {
       var codigo = Array.from(inputs).map(function (i) { return i.value; }).join('');
-      var msgErro = document.getElementById('msg-erro');
 
       if (codigo.length < 6) {
-        msgErro.textContent = 'Digite todos os 6 dígitos.';
-        msgErro.classList.remove('hidden');
+        mostrarErro('Digite todos os 6 dígitos.');
         return;
       }
 
       msgErro.classList.add('hidden');
-      window.location.href = ROTAS.novaSenha;
+      btnVerificar.disabled = true;
+      btnVerificar.textContent = 'Verificando...';
+
+      try {
+        var verificacao = await apiCall('/auth/password/otp/verify', {
+          method: 'POST',
+          body: { email: email, codigo: codigo }
+        });
+        // resetToken segue para a tela de nova senha pelo sessionStorage
+        sessionStorage.setItem('sf_reset_token', verificacao.resetToken);
+        window.location.href = ROTAS.novaSenha;
+      } catch (err) {
+        mostrarErro(err.message || 'Não foi possível verificar o código.');
+        inputs.forEach(function (i) { i.value = ''; });
+        inputs[0].focus();
+        btnVerificar.disabled = false;
+        btnVerificar.textContent = 'Verificar';
+      }
     });
   </script>
 </body>
