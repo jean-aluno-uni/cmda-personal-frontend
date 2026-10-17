@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CMDA SmartFleet — RPM</title>
+  <title>CMDA Personal — RPM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -40,37 +40,25 @@
     </div>
   </div>
 
-  <script src="../js/dados.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
   <script src="../js/app.js"></script>
   <script>
-    verificarAuth();
+    var RPM_MAX = 3000;
+    var veiculoId = null;
 
-    var conectado = estaConectado();
-
-    renderHeader({
-      back: ROTAS.home,
-      greeting: 'RPM do motor',
-      vehicle: DADOS.veiculo.modelo
-    });
-    renderBottomNav('');
-
-    // --- GAUGE ---
-    var rpm    = DADOS.telemetria.rpm;
-    var rpmMax = DADOS.telemetria.rpmMax;
-
-    if (conectado) {
-      renderRpmGauge('rpm-gauge', rpm, rpmMax);
-      document.getElementById('rpm-footnote').classList.remove('hidden');
-    } else {
-      document.getElementById('rpm-gauge').innerHTML = `
-        <p style="text-align:center;color:var(--text-secondary);font-size:13px;padding:48px 0 16px">
-          Veículo não conectado
-        </p>`;
+    function base() {
+      return '/vehicles/' + veiculoId;
     }
 
-    // --- STATUS ---
-    var statusCard = document.getElementById('rpm-status-card');
-    if (conectado) {
+    function semDados(texto, cor) {
+      document.getElementById('rpm-gauge').innerHTML =
+        '<p style="text-align:center;color:' + (cor || 'var(--text-secondary)') + ';font-size:13px;padding:48px 0 16px">' + esc(texto) + '</p>';
+      document.getElementById('rpm-status-card').innerHTML =
+        '<p class="metric-disconnected" style="font-size:13px;color:var(--text-secondary)">' + esc(texto) + '</p>';
+    }
+
+    function renderStatus(rpm) {
       var statusLabel, statusClass, statusDesc;
       if (rpm < 750) {
         statusLabel = 'Baixo';
@@ -90,7 +78,7 @@
         statusDesc  = 'RPM elevado. Reduza a aceleração.';
       }
 
-      statusCard.innerHTML = `
+      document.getElementById('rpm-status-card').innerHTML = `
         <div class="status-row">
           <div>
             <div class="card-title" style="margin-bottom:4px">Condição atual</div>
@@ -98,34 +86,82 @@
           </div>
           <span class="${statusClass}">${statusLabel}</span>
         </div>`;
-    } else {
-      statusCard.innerHTML = `<p class="metric-disconnected" style="font-size:13px;color:var(--text-secondary)">Veículo não conectado</p>`;
     }
 
-    // --- TABELA DIAGNÓSTICO ---
-    var diagTable = document.getElementById('diag-table');
-    var rows = DADOS.diagnostico.filter(function (d) {
-      return d.indicador === 'RPM' || d.indicador === 'Velocidade';
-    });
+    async function carregarTelemetria() {
+      semDados('Carregando...');
+      var t;
+      try {
+        t = await apiCall(base() + '/telemetry/latest');
+      } catch (e) {
+        semDados(e.message, 'var(--primary)');
+        return;
+      }
 
-    var linhas = rows.map(function (d, i) {
-      var isLast = i === rows.length - 1;
-      return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
-        <td>${d.indicador}</td>
-        <td class="${d.alerta ? 'td-warn' : ''}">${conectado ? d.valor : '—'}</td>
-        <td style="color:var(--text-secondary);font-size:12px">${conectado ? d.observacao : '—'}</td>
-      </tr>`;
-    }).join('');
+      if (!t.disponivel || t.rpm === null) {
+        semDados(t.motivo === 'sem_leituras' || t.disponivel ? 'Nenhuma leitura recebida do veículo' : 'Veículo não conectado');
+        return;
+      }
 
-    diagTable.innerHTML = `
-      <thead>
-        <tr>
-          <th>Indicador</th>
-          <th>Valor</th>
-          <th>Observação</th>
-        </tr>
-      </thead>
-      <tbody>${linhas}</tbody>`;
+      renderRpmGauge('rpm-gauge', t.rpm, RPM_MAX);
+      document.getElementById('rpm-footnote').classList.remove('hidden');
+      renderStatus(t.rpm);
+    }
+
+    async function carregarDiagnostico() {
+      var diagTable = document.getElementById('diag-table');
+      var cabecalho = `
+        <thead>
+          <tr>
+            <th>Indicador</th>
+            <th>Valor</th>
+            <th>Observação</th>
+          </tr>
+        </thead>`;
+
+      diagTable.innerHTML = cabecalho + '<tbody><tr><td colspan="3">' + msgCard('Carregando...') + '</td></tr></tbody>';
+
+      try {
+        var diag = await apiCall(base() + '/diagnostics?indicadores=RPM,Velocidade');
+        var linhas = diag.itens.map(function (d, i) {
+          var isLast = i === diag.itens.length - 1;
+          return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
+            <td>${esc(d.indicador)}</td>
+            <td class="${d.alerta ? 'td-warn' : ''}">${esc(d.valor)}</td>
+            <td style="color:var(--text-secondary);font-size:12px">${esc(d.observacao) || '—'}</td>
+          </tr>`;
+        }).join('');
+
+        diagTable.innerHTML = cabecalho + '<tbody>' + (linhas || '<tr><td colspan="3">' + msgCard('Sem itens de RPM no diagnóstico') + '</td></tr>') + '</tbody>';
+      } catch (e) {
+        var cor = e.status === 404 ? null : 'var(--primary)';
+        diagTable.innerHTML = cabecalho + '<tbody><tr><td colspan="3">' + msgCard(e.message, cor) + '</td></tr></tbody>';
+      }
+    }
+
+    async function carregarVeiculo() {
+      try {
+        var veiculo = await apiCall(base());
+        renderHeader({ back: ROTAS.home, greeting: 'RPM do motor', vehicle: veiculo.modelo });
+        atualizarBadgeAlertas(veiculoId);
+      } catch (e) {
+      }
+    }
+
+    if (verificarAuth()) {
+      veiculoId = lerVeiculoId();
+
+      renderHeader({ back: ROTAS.home, greeting: 'RPM do motor' });
+      renderBottomNav('');
+
+      if (!veiculoId) {
+        semDados('Nenhum veículo vinculado a esta conta.');
+      } else {
+        carregarVeiculo();
+        carregarTelemetria();
+        carregarDiagnostico();
+      }
+    }
   </script>
 </body>
 </html>

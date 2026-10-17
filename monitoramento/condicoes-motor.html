@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CMDA SmartFleet — Condições do Motor</title>
+  <title>CMDA Personal — Condições do Motor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -63,145 +63,171 @@
     </div>
   </div>
 
-  <script src="../js/dados.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
   <script src="../js/app.js"></script>
   <script>
-    verificarAuth();
+    var veiculoId = null;
 
-    var conectado = estaConectado();
+    function base() {
+      return '/vehicles/' + veiculoId;
+    }
 
-    renderHeader({
-      back: ROTAS.home,
-      greeting: 'Condições do motor',
-      vehicle: DADOS.veiculo.modelo
-    });
-    renderBottomNav('');
+    function grau(valor) {
+      return valor === null ? '— °C' : Math.round(valor) + ' °C';
+    }
 
-    // --- TEMP CARDS com ícones SVG ---
-    var tempCards = document.getElementById('temp-cards');
-    if (conectado) {
-      var t = DADOS.telemetria;
-      var oilWarn = t.tempOleo > 85;
-
-      tempCards.innerHTML = `
+    function cardTemp(icone, valor, label, warn) {
+      return `
         <div class="card" style="margin-bottom:0">
           <div class="temp-item-lg">
-            <span class="temp-icon-lg">${icoOil(oilWarn ? '#C2182B' : '#F59E0B', 28)}</span>
+            <span class="temp-icon-lg">${icone}</span>
             <div>
-              <div class="temp-value-lg ${oilWarn ? 'warn' : ''}">${t.tempOleo} °C${oilWarn ? ' ⚠' : ''}</div>
-              <div class="temp-label">Óleo</div>
-            </div>
-          </div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div class="temp-item-lg">
-            <span class="temp-icon-lg">${icoWater('#3B82F6', 28)}</span>
-            <div>
-              <div class="temp-value-lg">${t.tempLiquido} °C</div>
-              <div class="temp-label">Líquido</div>
-            </div>
-          </div>
-        </div>`;
-
-      document.getElementById('temp-card-geral').innerHTML = `
-        <div class="grid-2" style="margin-bottom:0">
-          <div class="card" style="margin-bottom:0">
-            <div class="temp-item-lg">
-              <span class="temp-icon-lg">${icoAir('#9CA3AF', 28)}</span>
-              <div>
-                <div class="temp-value-lg">${t.tempAr} °C</div>
-                <div class="temp-label">Ar de admissão</div>
-              </div>
-            </div>
-          </div>
-          <div class="card" style="margin-bottom:0">
-            <div class="temp-item-lg">
-              <span class="temp-icon-lg">${icoThermo('#10B981', 28)}</span>
-              <div>
-                <div class="temp-value-lg">${t.tempGeral} °C</div>
-                <div class="temp-label">Geral</div>
-              </div>
-            </div>
-          </div>
-        </div>`;
-    } else {
-      tempCards.innerHTML = `
-        <div class="card" style="margin-bottom:0">
-          <div class="temp-item-lg">
-            <span class="temp-icon-lg">${icoOil('#D1D5DB', 28)}</span>
-            <div>
-              <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
-              <div class="temp-label">Óleo</div>
-            </div>
-          </div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div class="temp-item-lg">
-            <span class="temp-icon-lg">${icoWater('#D1D5DB', 28)}</span>
-            <div>
-              <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
-              <div class="temp-label">Líquido</div>
-            </div>
-          </div>
-        </div>`;
-
-      document.getElementById('temp-card-geral').innerHTML = `
-        <div class="grid-2" style="margin-bottom:0">
-          <div class="card" style="margin-bottom:0">
-            <div class="temp-item-lg">
-              <span class="temp-icon-lg">${icoAir('#D1D5DB', 28)}</span>
-              <div>
-                <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
-                <div class="temp-label">Ar de admissão</div>
-              </div>
-            </div>
-          </div>
-          <div class="card" style="margin-bottom:0">
-            <div class="temp-item-lg">
-              <span class="temp-icon-lg">${icoThermo('#D1D5DB', 28)}</span>
-              <div>
-                <div class="temp-value-lg" style="color:var(--text-light)">— °C</div>
-                <div class="temp-label">Geral</div>
-              </div>
+              <div class="temp-value-lg ${warn ? 'warn' : ''}" ${valor === null ? 'style="color:var(--text-light)"' : ''}>${grau(valor)}${warn ? ' ⚠' : ''}</div>
+              <div class="temp-label">${label}</div>
             </div>
           </div>
         </div>`;
     }
 
-    // --- LINE CHART ---
-    if (conectado) {
-      renderLineChart('line-chart', DADOS.historicoTemperatura);
-    } else {
+    function renderTemperaturas(t) {
+      var vazio = !t;
+      var oleo = vazio ? null : t.tempOleo;
+      var liquido = vazio ? null : t.tempLiquido;
+      var ar = vazio ? null : t.tempAr;
+      var geral = vazio ? null : t.tempGeral;
+      var oilWarn = oleo !== null && oleo > 85;
+
+      document.getElementById('temp-cards').innerHTML =
+        cardTemp(icoOil(vazio ? '#D1D5DB' : (oilWarn ? '#C2182B' : '#F59E0B'), 28), oleo, 'Óleo', oilWarn) +
+        cardTemp(icoWater(vazio ? '#D1D5DB' : '#3B82F6', 28), liquido, 'Líquido', false);
+
+      document.getElementById('temp-card-geral').innerHTML =
+        '<div class="grid-2" style="margin-bottom:0">' +
+        cardTemp(icoAir(vazio ? '#D1D5DB' : '#9CA3AF', 28), ar, 'Ar de admissão', false) +
+        cardTemp(icoThermo(vazio ? '#D1D5DB' : '#10B981', 28), geral, 'Geral', false) +
+        '</div>';
+    }
+
+    function mensagemGrafico(texto, cor) {
       document.getElementById('line-chart').innerHTML =
-        '<p style="text-align:center;color:var(--text-secondary);font-size:13px;padding:24px 0">Veículo não conectado</p>';
+        '<p style="text-align:center;color:' + (cor || 'var(--text-secondary)') + ';font-size:13px;padding:24px 0">' + esc(texto) + '</p>';
     }
 
-    // --- TABELA DIAGNÓSTICO ---
-    var diagTable = document.getElementById('diag-table');
-    var motorRows = DADOS.diagnostico.filter(function (d) {
-      return d.indicador.toLowerCase().includes('temp');
-    });
+    async function carregarTelemetria() {
+      renderTemperaturas(null);
+      try {
+        var t = await apiCall(base() + '/telemetry/latest');
+        if (t.disponivel) renderTemperaturas(t);
+      } catch (e) {
+      }
+    }
 
-    var linhas = motorRows.map(function (d, i) {
-      var isLast = i === motorRows.length - 1;
-      return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
-        <td>${d.indicador}</td>
-        <td class="${d.alerta ? 'td-warn' : ''}">${conectado ? d.valor : '—'}</td>
-        <td style="font-size:11px;color:var(--text-secondary)">${d.referencia}</td>
-        <td style="font-size:12px;color:${d.alerta ? 'var(--primary)' : 'var(--text-secondary)'}">${conectado ? d.observacao : '—'}</td>
-      </tr>`;
-    }).join('');
+    function rotulo(texto, mesmoDia) {
+      var data = dataDaApi(texto);
+      if (mesmoDia) return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      return data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    }
 
-    diagTable.innerHTML = `
-      <thead>
-        <tr>
-          <th>Indicador</th>
-          <th>Valor</th>
-          <th>Referência</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>${linhas}</tbody>`;
+    async function carregarHistorico() {
+      mensagemGrafico('Carregando...');
+      var pontos;
+      try {
+        pontos = await apiCall(base() + '/temperature/history?range=7d');
+      } catch (e) {
+        mensagemGrafico(e.message, 'var(--primary)');
+        return;
+      }
+
+      if (pontos.length < 2) {
+        mensagemGrafico('Ainda não há leituras suficientes para o histórico');
+        return;
+      }
+
+      var primeiro = dataDaApi(pontos[0].dataHora).toDateString();
+      var mesmoDia = pontos.every(function (p) { return dataDaApi(p.dataHora).toDateString() === primeiro; });
+      var passo = Math.ceil(pontos.length / 6);
+
+      var series = {};
+      ['oleo', 'liquido', 'ar', 'geral'].forEach(function (chave) {
+        if (pontos.every(function (p) { return p[chave] !== null; })) {
+          series[chave] = pontos.map(function (p) { return p[chave]; });
+        }
+      });
+
+      if (Object.keys(series).length === 0) {
+        mensagemGrafico('Ainda não há leituras suficientes para o histórico');
+        return;
+      }
+
+      renderLineChart('line-chart', {
+        labels: pontos.map(function (p, i) { return i % passo === 0 ? rotulo(p.dataHora, mesmoDia) : ''; }),
+        series: series
+      });
+    }
+
+    async function carregarDiagnostico() {
+      var diagTable = document.getElementById('diag-table');
+      var cabecalho = `
+        <thead>
+          <tr>
+            <th>Indicador</th>
+            <th>Valor</th>
+            <th>Referência</th>
+            <th>Status</th>
+          </tr>
+        </thead>`;
+
+      diagTable.innerHTML = cabecalho + '<tbody><tr><td colspan="4">' + msgCard('Carregando...') + '</td></tr></tbody>';
+
+      try {
+        var diag = await apiCall(base() + '/diagnostics');
+        var linhasMotor = diag.itens.filter(function (d) {
+          return d.indicador.toLowerCase().includes('temp');
+        });
+
+        var linhas = linhasMotor.map(function (d, i) {
+          var isLast = i === linhasMotor.length - 1;
+          return `<tr style="${isLast ? '' : 'border-bottom:1px solid var(--border)'}">
+            <td>${esc(d.indicador)}</td>
+            <td class="${d.alerta ? 'td-warn' : ''}">${esc(d.valor)}</td>
+            <td style="font-size:11px;color:var(--text-secondary)">${esc(d.referencia) || '—'}</td>
+            <td style="font-size:12px;color:${d.alerta ? 'var(--primary)' : 'var(--text-secondary)'}">${esc(d.observacao) || '—'}</td>
+          </tr>`;
+        }).join('');
+
+        diagTable.innerHTML = cabecalho + '<tbody>' + (linhas || '<tr><td colspan="4">' + msgCard('Sem itens de temperatura no diagnóstico') + '</td></tr>') + '</tbody>';
+      } catch (e) {
+        var cor = e.status === 404 ? null : 'var(--primary)';
+        diagTable.innerHTML = cabecalho + '<tbody><tr><td colspan="4">' + msgCard(e.message, cor) + '</td></tr></tbody>';
+      }
+    }
+
+    async function carregarVeiculo() {
+      try {
+        var veiculo = await apiCall(base());
+        renderHeader({ back: ROTAS.home, greeting: 'Condições do motor', vehicle: veiculo.modelo });
+        atualizarBadgeAlertas(veiculoId);
+      } catch (e) {
+      }
+    }
+
+    if (verificarAuth()) {
+      veiculoId = lerVeiculoId();
+
+      renderHeader({ back: ROTAS.home, greeting: 'Condições do motor' });
+      renderBottomNav('');
+
+      if (!veiculoId) {
+        renderTemperaturas(null);
+        mensagemGrafico('Nenhum veículo vinculado a esta conta.');
+      } else {
+        carregarVeiculo();
+        carregarTelemetria();
+        carregarHistorico();
+        carregarDiagnostico();
+      }
+    }
   </script>
 </body>
 </html>
