@@ -88,7 +88,7 @@ O estado de conexão vem do backend (campo `conectado` do veículo). Com o veíc
 ```
 
 ├── index.html                  # Entrada da aplicação (redireciona para login/)
-├── CLAUDE.md                   # Regras do grupo para mexer no código
+├── CONTRIBUTING.md             # Regras do grupo para mexer no código
 ├── css/
 │   └── style.css               # Design system completo
 ├── img/
