@@ -38,32 +38,6 @@ function verificarAuth() {
   return true;
 }
 
-function fazerLogin() {
-  sessionStorage.setItem('sf_logado', 'true');
-  sessionStorage.setItem('sf_conectado', DADOS.veiculo.conectado ? 'true' : 'false');
-  // console.log('login ok, redirecionando...')
-  window.location.href = ROTAS.home;
-}
-
-function fazerLogout() {
-  sessionStorage.clear();
-  window.location.href = ROTAS.login;
-}
-
-function estaConectado() {
-  return sessionStorage.getItem('sf_conectado') === 'true';
-}
-
-function conectarVeiculo() {
-  sessionStorage.setItem('sf_conectado', 'true');
-  window.location.reload();
-}
-
-function desconectarVeiculo() {
-  sessionStorage.setItem('sf_conectado', 'false');
-  window.location.href = ROTAS.home;
-}
-
 // --- helpers pros dados da API ---
 
 // a API manda data em UTC sem fuso (ex: 2026-10-05T14:30:00), entao forca o Z
@@ -220,11 +194,9 @@ function renderHeader(config) {
   const el = document.getElementById('main-header');
   if (!el) return;
 
-  // telas ja integradas nao carregam dados.js; o badge delas vem do atualizarBadgeAlertas
-  const temMock = typeof DADOS !== 'undefined';
-  const contAlertas = temMock ? DADOS.alertas.filter(a => a.nivel === 'high').length : 0;
-  const foto = temMock ? DADOS.usuario.foto : '../img/foto-perfil.png';
-  const nome = temMock ? DADOS.usuario.nome : 'usuário';
+  const contAlertas = 0;
+  const foto = '../img/foto-perfil.png';
+  const nome = 'usuário';
 
   const btnEsq = config.back
     ? `<a href="${typeof config.back === 'string' ? config.back : ROTAS.home}" class="header-back" aria-label="Voltar">${icoBack()}</a>`
