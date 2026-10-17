@@ -17,7 +17,7 @@ Regras do grupo para quem (pessoa ou IA) mexer neste repositório. Os dados vêm
 <script src="../js/app.js"></script>     <!-- verificarAuth, header, gráficos, helpers -->
 ```
 
-`js/dados.js` é o mock antigo. **Tela integrada não carrega `dados.js`.** Quando a última tela for integrada, o arquivo pode ser apagado.
+Nenhuma tela usa dados fixos. Toda informação exibida vem da API.
 
 ## Regras de integração
 

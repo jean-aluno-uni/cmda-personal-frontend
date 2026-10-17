@@ -1,8 +1,8 @@
-# CMDA SmartFleet — Frontend Web
+# CMDA Personal — Frontend Web
 
 ## Sobre o Projeto
 
-O CMDA SmartFleet permite que condutores e gestores de frota acompanhem remotamente indicadores de telemetria do veículo: temperatura do motor, RPM, velocidade, alertas e diagnóstico completo.
+O CMDA Personal, Central de Mapeamento de Desempenho Automotivo, permite que motoristas acompanhem os indicadores de telemetria do veículo: temperatura do motor, RPM, velocidade, alertas e diagnóstico completo.
 
 ## Equipe
 
@@ -51,7 +51,7 @@ Existe também `outro@cmda.app` / `Outro@1234`, com outro veículo, para testar 
 
 ## Integração com a API
 
-O front deixou de usar só dados fixos e passou a buscar os dados na API do backend por HTTP, enviando o token JWT em cada requisição.
+Todas as telas buscam os dados na API do backend por HTTP, enviando o token JWT em cada requisição. O front não usa mais dados fixos.
 
 - **`js/config.js`** — URL base da API.
 - **`js/api.js`** — função `apiCall(caminho, { method, body })`, usada por todas as telas. Ela coloca o token no cabeçalho `Authorization: Bearer ...`, envia/recebe JSON, devolve a mensagem de erro da API (`{"error": "..."}`) e, quando a API responde **401** (sessão expirada ou encerrada), limpa a sessão e volta para o login mostrando o motivo. No mesmo arquivo ficam as funções de guardar e ler o token e o id do veículo no `sessionStorage` (`sf_token` e `sf_veiculo_id`).
@@ -65,11 +65,11 @@ Fluxo: login (`POST /auth/login`) → guarda o token → `GET /vehicles` → gua
 |------|--------------|-----------|
 | Alertas | `GET /vehicles/{id}`, `GET /vehicles/{id}/alerts/summary`, `GET /vehicles/{id}/alerts` | Sim |
 | Diagnóstico | `GET /vehicles/{id}`, `GET /vehicles/{id}/diagnostics`, `GET /vehicles/{id}/telemetry/latest` | Sim |
-| Login / recuperar senha | `POST /auth/login`, `GET /vehicles`, `POST /auth/password/...` | Em andamento |
-| Perfil | `GET /users/me`, `GET /vehicles/{id}`, `POST /vehicles/{id}/disconnect`, `POST /auth/logout` | Em andamento |
-| Home, Condições do motor, RPM | `GET /vehicles/{id}/telemetry/latest`, `/status`, `/alerts/summary`, `/temperature/history`, `POST /connect` | Em andamento |
-
-As telas ainda não integradas continuam lendo `js/dados.js` (mock). Quando todas estiverem integradas, esse arquivo será removido.
+| Login / recuperar senha | `POST /auth/login`, `GET /vehicles`, `POST /auth/password/...` | Sim |
+| Perfil | `GET /users/me`, `GET /vehicles/{id}`, `POST /vehicles/{id}/connect`, `POST /vehicles/{id}/disconnect`, `POST /auth/logout` | Sim |
+| Home | `GET /users/me`, `GET /vehicles/{id}`, `GET /vehicles/{id}/telemetry/latest`, `GET /vehicles/{id}/alerts/summary`, `POST /vehicles/{id}/connect`, `POST /vehicles/{id}/disconnect` | Sim |
+| Condições do motor | `GET /vehicles/{id}/telemetry/latest`, `GET /vehicles/{id}/temperature/history`, `GET /vehicles/{id}/diagnostics` | Sim |
+| RPM | `GET /vehicles/{id}/telemetry/latest`, `GET /vehicles/{id}/diagnostics` | Sim |
 
 ## Estado de conexão
 
@@ -98,8 +98,7 @@ O estado de conexão vem do backend (campo `conectado` do veículo). Com o veíc
 ├── js/
 │   ├── config.js               # URL da API
 │   ├── api.js                  # apiCall + token e veículo no sessionStorage
-│   ├── app.js                  # verificarAuth, utilitários compartilhados e gráficos SVG
-│   └── dados.js                # Dados mockados (só nas telas ainda não integradas)
+│   └── app.js                  # verificarAuth, utilitários compartilhados e gráficos SVG
 ├── login/
 │   ├── index.html              # Login
 │   ├── recuperar-senha.html    # Recuperação de senha
@@ -110,9 +109,9 @@ O estado de conexão vem do backend (campo `conectado` do veículo). Com o veíc
 │   ├── condicoes-motor.html    # Detalhes do motor
 │   └── rpm.html                # Detalhes de RPM
 ├── diagnostico/
-│   └── diagnostico.html        # Aba diagnóstico (integrada)
+│   └── diagnostico.html        # Aba diagnóstico
 ├── alertas/
-│   └── alertas.html            # Aba alertas (integrada, modelo para as outras)
+│   └── alertas.html            # Aba alertas (modelo de integração para as outras)
 └── perfil/
     └── perfil.html             # Aba perfil
 ```
